@@ -45,7 +45,6 @@ class EventUploadResponse(BaseModel):
 
         if not self.duplicated and self.ticket_id is None:
             raise ValueError("ticket_id is required when duplicated is false.")
-
         return self
 
 
@@ -87,6 +86,10 @@ class ReviseResponse(BaseModel):
         if not self.safety_check_passed and not self.blocked_sentences:
             raise ValueError(
                 "blocked_sentences is required when safety_check_passed is false."
+            )
+        if self.safety_check_passed and self.blocked_sentences:
+            raise ValueError(
+                "blocked_sentences must be empty when safety_check_passed is true."
             )
 
         return self

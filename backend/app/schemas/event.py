@@ -32,7 +32,10 @@ class EventNormalized(BaseModel):
     @field_validator("drug_name")
     @classmethod
     def normalize_drug_name(cls, value: str) -> str:
-        return value.strip().lower()
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("drug_name must not be empty.")
+        return normalized
 
     @model_validator(mode="after")
     def check_recall_fields(self) -> "EventNormalized":

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.schemas.common import (
     ApprovalStatus,
     Classification,
+    DocumentType,
     EventType,
     Priority,
     ReviewType,
@@ -30,9 +31,9 @@ class IdentityIssue(BaseModel):
 
 
 class EvidenceIssue(BaseModel):
-    required_sources: list[str]
-    found_sources: list[str]
-    missing_sources: list[str]
+    required_sources: list[DocumentType]
+    found_sources: list[DocumentType]
+    missing_sources: list[DocumentType]
     coverage_score: float = Field(..., ge=0.0, le=1.0)
 
 

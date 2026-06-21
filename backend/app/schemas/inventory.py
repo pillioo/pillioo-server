@@ -32,6 +32,9 @@ class InventoryMatchResult(BaseModel):
 
         if self.matched and self.match_type == MatchType.NO_MATCH:
             raise ValueError("match_type cannot be no_match when matched is true.")
+        
+        if not self.matched and self.match_type != MatchType.NO_MATCH:
+            raise ValueError("match_type must be no_match when matched is false.")
 
         if self.needs_identity_review and not self.identity_review_reason:
             raise ValueError(
