@@ -1,0 +1,93 @@
+version: "3.9"
+
+services:
+  # =========================
+  # Core API
+  # =========================
+  fastapi:
+    build: .
+    container_name: pillioo_fastapi
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    env_file: .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
+
+  # =========================
+  # Core DB
+  # =========================
+  postgres:
+    image: postgres:15
+    container_name: pillioo_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # =========================
+  # RAG STACK (optional)
+  # =========================
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.25
+    container_name: pillioo_etcd
+    profiles: ["rag"]
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967294
+      - ETCD_SNAPSHOT_COUNT=50000
+    command: >
+      etcd
+      -advertise-client-urls=http://etcd:2379
+      -listen-client-urls=http://0.0.0.0:2379
+      --data-dir=/etcd
+    volumes:
+      - etcd_data:/etcd
+
+  minio:
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    container_name: pillioo_minio
+    profiles: ["rag"]
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: minio server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  milvus:
+    image: milvusdb/milvus:v2.4.23
+    container_name: pillioo_milvus
+    profiles: ["rag"]
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - etcd
+      - minio
+    volumes:
+      - milvus_data:/var/lib/milvus
+
+# =========================
+# Volumes
+# =========================
+volumes:
+  postgres_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
