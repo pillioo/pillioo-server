@@ -8,6 +8,10 @@ mavenHomeManager.xml
 # Datasource local storage ignored files
 dataSources/
 dataSources.local.xml
+# generated raw source data
+data/rag/raw/openfda/**/*.json
+# generated processed artifacts
+data/rag/processed/*.jsonl
 
 # Environment variables
 .env
