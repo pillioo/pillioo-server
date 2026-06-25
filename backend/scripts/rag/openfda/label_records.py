@@ -1,83 +1,17 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-from pathlib import Path
 from typing import Any
 
-import httpx
-from dotenv import load_dotenv
-
-
-BASE_URL = "https://api.fda.gov/drug/label.json"
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT_DIR / "data" / "rag" / "raw" / "openfda" / "label"
-DOC_DIR = ROOT_DIR / "data" / "rag" / "documents" / "label"
-
-API_LIMIT_PER_DRUG = 10
-MAX_RECORDS_PER_DRUG = 2
-TARGET_LABEL_DOCUMENTS = 60
-MIN_RECORD_SCORE = 8
-
-
-DRUG_NAMES = [
-    # Sedation / anesthesia / analgesics
-    "midazolam",
-    "propofol",
-    "fentanyl",
-    "morphine sulfate",
-    "hydromorphone",
-    "ketamine",
-    "dexmedetomidine",
-    "bupivacaine hydrochloride",
-    "lidocaine",
-
-    # Vasopressors / emergency medications
-    "epinephrine",
-    "norepinephrine",
-    "phenylephrine",
-    "dopamine",
-    "dobutamine",
-    "naloxone",
-
-    # Antibiotics
-    "vancomycin",
-    "ceftriaxone",
-    "cefazolin",
-    "piperacillin and tazobactam",
-    "meropenem",
-
-    # Anticoagulants / cardiovascular
-    "heparin sodium",
-    "enoxaparin sodium",
-    "warfarin sodium",
-    "alteplase",
-    "amiodarone",
-    "nitroglycerin",
-
-    # Endocrine / metabolic
-    "insulin regular human",
-    "insulin glargine",
-    "potassium chloride",
-    "magnesium sulfate",
-    "dextrose",
-    "sodium chloride",
-
-    # Antiemetic / GI / pain
-    "ondansetron",
-    "metoclopramide",
-    "pantoprazole",
-    "ketorolac",
-    "acetaminophen",
-
-    # Steroids / oncology-related
-    "dexamethasone",
-    "methylprednisolone",
-    "methotrexate",
-    "cisplatin",
-]
+from scripts.rag.openfda.common import (
+    as_list,
+    clean_text,
+    first,
+    normalize_drug_name,
+    slugify,
+    yaml_quote,
+)
 
 
 SECTION_SOURCES: list[tuple[str, list[str]]] = [
@@ -101,45 +35,31 @@ SECTION_SOURCES: list[tuple[str, list[str]]] = [
     ("information_for_patients", ["information_for_patients"]),
 ]
 
+# These tokens are ignored when matching the query drug so salt/form variants
+# still group together, but the core ingredient must remain present.
+SALT_OR_FORM_TOKENS = {
+    "anhydrous",
+    "bitartrate",
+    "citrate",
+    "dextrose",
+    "hbr",
+    "hcl",
+    "hydrochloride",
+    "hydrate",
+    "human",
+    "monohydrate",
+    "sodium",
+    "sulfate",
+}
 
-def slugify(value: str, max_length: int = 80) -> str:
-    value = value.lower().strip()
-    value = re.sub(r"[^a-z0-9]+", "_", value)
-    value = value.strip("_") or "unknown"
-    return value[:max_length].strip("_") or "unknown"
-
-
-def clean_text(value: str) -> str:
-    value = value.replace("\r\n", "\n").replace("\r", "\n")
-    value = re.sub(r"[ \t]+", " ", value)
-    value = re.sub(r"\n{3,}", "\n\n", value)
-    return value.strip()
-
-
-def first(value: Any, default: str = "") -> str:
-    if isinstance(value, list) and value:
-        return str(value[0])
-    if isinstance(value, str):
-        return value
-    return default
-
-
-def as_list(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    return []
-
-
-def yaml_quote(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
-
-
-def normalize_drug_name(value: str) -> str:
-    value = value.lower().strip()
-    value = re.sub(r"\s+", " ", value)
-    return value
+LABEL_NOISY_TERMS = {
+    "cold and flu",
+    "cough plus cold",
+    "dietary supplement",
+    "homeopathic",
+    "kit",
+    "meridian opener",
+}
 
 
 def get_openfda(record: dict[str, Any]) -> dict[str, Any]:
@@ -210,7 +130,95 @@ def get_included_sections(record: dict[str, Any]) -> list[str]:
     return included
 
 
-def score_label_record(record: dict[str, Any]) -> int:
+def normalize_match_text(value: str) -> str:
+    value = value.lower()
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def get_query_tokens(drug_name: str) -> list[str]:
+    tokens = normalize_match_text(drug_name).split()
+    core_tokens = [token for token in tokens if token not in SALT_OR_FORM_TOKENS]
+    return core_tokens or tokens
+
+
+def field_contains_query(value: Any, query_tokens: list[str]) -> bool:
+    values = as_list(value)
+    for item in values:
+        normalized = normalize_match_text(item)
+        if all(re.search(rf"\b{re.escape(token)}\b", normalized) for token in query_tokens):
+            return True
+    return False
+
+
+def get_label_query_match_fields(
+    record: dict[str, Any],
+    query_drug_name: str,
+) -> list[str]:
+    # openFDA can return rich labels that only mention the query drug as a
+    # secondary ingredient; tracking the matched field makes that auditable.
+    openfda = get_openfda(record)
+    query_tokens = get_query_tokens(query_drug_name)
+    match_fields: list[str] = []
+
+    for field_name, value in [
+        ("generic_name", openfda.get("generic_name")),
+        ("brand_name", openfda.get("brand_name")),
+        ("substance_name", openfda.get("substance_name")),
+        ("active_ingredient", record.get("active_ingredient")),
+    ]:
+        if field_contains_query(value, query_tokens):
+            match_fields.append(field_name)
+
+    return match_fields
+
+
+def has_noisy_label_terms(record: dict[str, Any]) -> bool:
+    openfda = get_openfda(record)
+    searchable_parts = [
+        get_generic_name(record, fallback_name=""),
+        get_brand_name(record, fallback_name=""),
+        first(openfda.get("product_type"), ""),
+        get_section_text(record, ["indications_and_usage"]),
+    ]
+    searchable = normalize_match_text(" ".join(searchable_parts))
+    return any(term in searchable for term in LABEL_NOISY_TERMS)
+
+
+def has_broad_combination_name(record: dict[str, Any]) -> bool:
+    # Large kits and multi-product bundles tend to score well on section
+    # richness, but they are weak standalone RAG evidence for a single drug.
+    generic_name = get_generic_name(record, fallback_name="").lower()
+    if not generic_name:
+        return False
+
+    separators = len(re.findall(r"\b(?:and|with)\b|,", generic_name))
+    return separators >= 3
+
+
+def is_secondary_combination_match(
+    record: dict[str, Any],
+    query_drug_name: str,
+) -> bool:
+    # For single-token drugs, avoid saving labels where the drug only appears
+    # after "and/with" in a combination product name.
+    query_tokens = get_query_tokens(query_drug_name)
+    if len(query_tokens) != 1:
+        return False
+
+    generic_name = get_generic_name(record, fallback_name="").lower()
+    if not re.search(r"\b(?:and|with)\b|,", generic_name):
+        return False
+
+    primary_part = re.split(r"\b(?:and|with)\b|,", generic_name, maxsplit=1)[0]
+    normalized_primary = normalize_match_text(primary_part)
+    return not re.search(rf"\b{re.escape(query_tokens[0])}\b", normalized_primary)
+
+
+def score_label_record(
+    record: dict[str, Any],
+    query_drug_name: str | None = None,
+) -> int:
     score = 0
     openfda = get_openfda(record)
 
@@ -268,6 +276,24 @@ def score_label_record(record: dict[str, Any]) -> int:
     if record.get("effective_time"):
         score += 1
 
+    if query_drug_name:
+        match_fields = get_label_query_match_fields(record, query_drug_name)
+        if "generic_name" in match_fields or "brand_name" in match_fields:
+            score += 10
+        elif match_fields:
+            score += 2
+        else:
+            score -= 25
+
+    if has_noisy_label_terms(record):
+        score -= 35
+
+    if has_broad_combination_name(record):
+        score -= 25
+
+    if query_drug_name and is_secondary_combination_match(record, query_drug_name):
+        score -= 30
+
     total_chars = sum(
         len(get_section_text(record, source_fields))
         for _, source_fields in SECTION_SOURCES
@@ -277,30 +303,10 @@ def score_label_record(record: dict[str, Any]) -> int:
     return score
 
 
-def fetch_label_payload(drug_name: str, limit: int = API_LIMIT_PER_DRUG) -> dict[str, Any]:
-    load_dotenv()
-
-    params: dict[str, Any] = {
-        "search": (
-            f'openfda.generic_name:"{drug_name}" '
-            f'OR openfda.brand_name:"{drug_name}" '
-            f'OR openfda.substance_name:"{drug_name}" '
-            f'OR active_ingredient:"{drug_name}"'
-        ),
-        "limit": limit,
-    }
-
-    api_key = os.getenv("OPENFDA_API_KEY")
-    if api_key:
-        params["api_key"] = api_key
-
-    with httpx.Client(timeout=30.0) as client:
-        response = client.get(BASE_URL, params=params)
-        response.raise_for_status()
-        return response.json()
-
-
-def rank_label_records(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rank_label_records(
+    results: list[dict[str, Any]],
+    query_drug_name: str | None = None,
+) -> list[dict[str, Any]]:
     deduped: dict[str, dict[str, Any]] = {}
 
     for record in results:
@@ -309,22 +315,17 @@ def rank_label_records(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         existing = deduped.get(identifier)
-        if existing is None or score_label_record(record) > score_label_record(existing):
+        if existing is None or score_label_record(
+            record,
+            query_drug_name=query_drug_name,
+        ) > score_label_record(existing, query_drug_name=query_drug_name):
             deduped[identifier] = record
 
-    return sorted(deduped.values(), key=score_label_record, reverse=True)
-
-
-def save_raw_record(record: dict[str, Any], document_id: str) -> Path:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-
-    path = RAW_DIR / f"{document_id}.json"
-    path.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    return sorted(
+        deduped.values(),
+        key=lambda record: score_label_record(record, query_drug_name=query_drug_name),
+        reverse=True,
     )
-
-    return path
 
 
 def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
@@ -353,6 +354,8 @@ def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
         f"document_id: {yaml_quote(document_id)}",
         "document_type: label",
         "event_type: label_update",
+        f"openfda_query_drug: {yaml_quote(normalize_drug_name(fallback_name))}",
+        f"query_match_fields: {json.dumps(get_label_query_match_fields(record, fallback_name), ensure_ascii=False)}",
         f"drug_name: {yaml_quote(normalized_drug_name)}",
         f"normalized_drug_name: {yaml_quote(normalized_drug_name)}",
         f"brand_name: {yaml_quote(brand_name)}",
@@ -387,99 +390,6 @@ def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
         if not text:
             continue
 
-        lines.extend(
-            [
-                f"## {canonical_section}",
-                text,
-                "",
-            ]
-        )
+        lines.extend([f"## {canonical_section}", text, ""])
 
     return "\n".join(lines).strip() + "\n"
-
-
-def save_markdown(record: dict[str, Any], fallback_name: str) -> Path:
-    DOC_DIR.mkdir(parents=True, exist_ok=True)
-
-    document_id = make_document_id(record, fallback_name=fallback_name)
-    path = DOC_DIR / f"{document_id}.md"
-    path.write_text(
-        label_record_to_markdown(record, fallback_name=fallback_name),
-        encoding="utf-8",
-    )
-
-    return path
-
-
-def main() -> None:
-    total_saved = 0
-    total_skipped = 0
-    total_failed = 0
-    seen_document_ids: set[str] = set()
-
-    for drug_name in DRUG_NAMES:
-        if total_saved >= TARGET_LABEL_DOCUMENTS:
-            break
-
-        try:
-            payload = fetch_label_payload(drug_name, limit=API_LIMIT_PER_DRUG)
-        except httpx.HTTPStatusError as exc:
-            print(f"[WARN] Failed to fetch label for {drug_name}: {exc}")
-            total_failed += 1
-            continue
-        except httpx.RequestError as exc:
-            print(f"[WARN] Request error while fetching label for {drug_name}: {exc}")
-            total_failed += 1
-            continue
-
-        results = payload.get("results", [])
-        if not isinstance(results, list) or not results:
-            print(f"[WARN] No label found for {drug_name}")
-            total_skipped += 1
-            continue
-
-        ranked_records = rank_label_records(results)
-        saved_for_drug = 0
-
-        for record in ranked_records:
-            if saved_for_drug >= MAX_RECORDS_PER_DRUG:
-                break
-            if total_saved >= TARGET_LABEL_DOCUMENTS:
-                break
-
-            score = score_label_record(record)
-            if score < MIN_RECORD_SCORE:
-                total_skipped += 1
-                continue
-
-            document_id = make_document_id(record, fallback_name=drug_name)
-            if document_id in seen_document_ids:
-                total_skipped += 1
-                continue
-
-            save_raw_record(record, document_id=document_id)
-            md_path = save_markdown(record, fallback_name=drug_name)
-
-            seen_document_ids.add(document_id)
-            saved_for_drug += 1
-            total_saved += 1
-
-            print(
-                f"[OK] Saved label document: {md_path.name} "
-                f"(score={score}, drug={drug_name})"
-            )
-
-        if saved_for_drug == 0:
-            print(f"[WARN] No high-quality label selected for {drug_name}")
-
-    print()
-    print("[SUMMARY]")
-    print(f"saved={total_saved}")
-    print(f"skipped={total_skipped}")
-    print(f"failed={total_failed}")
-    print(f"raw_dir={RAW_DIR}")
-    print(f"doc_dir={DOC_DIR}")
-
-
-if __name__ == "__main__":
-    main()
