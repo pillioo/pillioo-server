@@ -1,30 +1,8 @@
 from __future__ import annotations
 
-import json
-import re
-import textwrap
 from typing import Any
 
-
-def slugify(value: str, max_length: int = 90) -> str:
-    value = value.lower().strip()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
-    value = value.strip("-") or "unknown"
-    return value[:max_length].strip("-") or "unknown"
-
-
-def yaml_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-
-    if isinstance(value, list):
-        return "[" + ", ".join(json.dumps(item, ensure_ascii=False) for item in value) + "]"
-
-    return json.dumps(str(value), ensure_ascii=False)
-
-
-def normalize_block(value: str) -> str:
-    return textwrap.dedent(value).strip()
+from scripts.rag.common import normalize_block, slugify, yaml_value
 
 
 def build_sop_roles_and_responsibilities(sop: dict[str, Any]) -> list[str]:

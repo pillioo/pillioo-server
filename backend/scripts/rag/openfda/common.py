@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 import yaml
 from dotenv import load_dotenv
+from scripts.rag.common import slugify as base_slugify
 
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -20,10 +21,7 @@ MANIFEST_PATH = PROCESSED_DIR / "openfda_fetch_manifest.json"
 
 
 def slugify(value: str, max_length: int = 80) -> str:
-    value = value.lower().strip()
-    value = re.sub(r"[^a-z0-9]+", "_", value)
-    value = value.strip("_") or "unknown"
-    return value[:max_length].strip("_") or "unknown"
+    return base_slugify(value, max_length=max_length, separator="_")
 
 
 def clean_text(value: str) -> str:
