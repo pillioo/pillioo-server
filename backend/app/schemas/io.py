@@ -97,6 +97,7 @@ class ReviseResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    ticket_id: str = Field(..., min_length=1)
     user_query: str = Field(..., min_length=1)
     session_id: Optional[str] = Field(default=None, min_length=1)
 

@@ -610,9 +610,22 @@ class TestEvidenceRoutingResult:
 
 
 class TestChatRequest:
+    def test_valid_ticket_scoped_chat_request(self):
+        request = ChatRequest(ticket_id="TICKET-001", user_query="What happened?")
+
+        assert request.ticket_id == "TICKET-001"
+
+    def test_rejects_empty_ticket_id(self):
+        with pytest.raises(ValidationError, match="ticket_id"):
+            ChatRequest(ticket_id="", user_query="What happened?")
+
     def test_rejects_empty_session_id(self):
         with pytest.raises(ValidationError, match="session_id"):
-            ChatRequest(user_query="What happened?", session_id="")
+            ChatRequest(
+                ticket_id="TICKET-001",
+                user_query="What happened?",
+                session_id="",
+            )
 
 
 class TestIdentityReviewPayload:
