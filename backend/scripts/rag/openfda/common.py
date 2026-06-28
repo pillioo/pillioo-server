@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -137,12 +138,23 @@ def save_raw_record(raw_dir: Path, record: dict[str, Any], document_id: str) -> 
     return write_json(raw_dir / f"{document_id}.json", record)
 
 
-def clean_markdown_dir(doc_dir: Path) -> None:
+def clean_markdown_dir(
+    doc_dir: Path,
+    retries: int = 3,
+    delay_seconds: float = 0.25,
+) -> None:
     if not doc_dir.exists():
         return
 
     for existing_path in doc_dir.glob("*.md"):
-        existing_path.unlink()
+        for attempt in range(retries + 1):
+            try:
+                existing_path.unlink()
+                break
+            except PermissionError:
+                if attempt >= retries:
+                    raise
+                time.sleep(delay_seconds * (attempt + 1))
 
 
 def write_fetch_manifest(kind: str, payload: dict[str, Any]) -> Path:

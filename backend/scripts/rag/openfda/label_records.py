@@ -256,6 +256,39 @@ def is_secondary_combination_match(
     return not re.search(rf"\b{re.escape(query_tokens[0])}\b", normalized_primary)
 
 
+def is_primary_identity_candidate(product_name: str, query_drug_name: str) -> bool:
+    query_tokens = get_query_tokens(query_drug_name)
+    if not query_tokens:
+        return False
+
+    primary_part = re.split(
+        r"\b(?:and|in|with)\b|,",
+        product_name.lower(),
+        maxsplit=1,
+    )[0]
+    normalized_primary = normalize_match_text(primary_part)
+    return all(
+        re.search(rf"\b{re.escape(token)}\b", normalized_primary)
+        for token in query_tokens
+    )
+
+
+def get_identity_candidate_names(
+    generic_name: str,
+    fallback_name: str,
+    brand_name: str,
+) -> list[str]:
+    candidates = [generic_name]
+    if is_primary_identity_candidate(generic_name, fallback_name) or (
+        brand_name != generic_name
+        and is_primary_identity_candidate(brand_name, fallback_name)
+    ):
+        candidates.append(fallback_name)
+    if brand_name != generic_name:
+        candidates.append(brand_name)
+    return candidates
+
+
 def score_label_record(
     record: dict[str, Any],
     query_drug_name: str | None = None,
@@ -376,7 +409,9 @@ def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
     generic_name = get_generic_name(record, fallback_name=fallback_name)
     brand_name = get_brand_name(record, fallback_name=generic_name)
     fallback_normalized_drug_name = normalize_drug_name(generic_name)
-    identity = get_best_cached_drug_identity([generic_name, fallback_name, brand_name])
+    identity = get_best_cached_drug_identity(
+        get_identity_candidate_names(generic_name, fallback_name, brand_name)
+    )
     normalized_drug_name = identity["normalized_drug_name"] or fallback_normalized_drug_name
 
     product_ndc = as_list(openfda.get("product_ndc"))
