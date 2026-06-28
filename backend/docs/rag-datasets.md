@@ -1,17 +1,42 @@
 # RAG Evidence Datasets
 
-This project generates four RAG evidence document datasets:
+This project generates four RAG evidence document datasets and one drug
+identity reference cache:
 
 - `label`
 - `recall_notice`
 - `sop`
 - `policy`
+- `identity` reference cache
 
 The generated markdown and processed artifacts are local build outputs. They are
 not committed to Git because they can be regenerated from scripts, YAML fixtures,
 and openFDA raw data.
 
 ## Dataset Types
+
+### Identity
+
+Drug identity cache entries are generated from RxNorm lookups.
+
+Generated cache output is written to:
+
+```text
+data/reference/drug_identity_cache.json
+```
+
+The cache maps raw drug names to normalized identity metadata:
+
+- `raw_name`
+- `normalized_drug_name`
+- `rxnorm_rxcui`
+- `rxnorm_name`
+- `rxnorm_tty`
+- `match_basis`
+
+OpenFDA label and recall markdown generation uses this cache when available.
+NDC and lot matching should still remain the strongest inventory matching
+signals; RxNorm identity is a supporting signal for salt/form/name variation.
 
 ### Label
 
@@ -28,6 +53,10 @@ Each label document includes frontmatter such as:
 - `document_type: label`
 - `event_type: label_update`
 - `drug_name`
+- `openfda_drug_name`
+- `rxnorm_rxcui`
+- `rxnorm_name`
+- `rxnorm_tty`
 - `product_ndc`
 - `package_ndc`
 - `route`
@@ -57,6 +86,10 @@ Each recall notice document includes frontmatter such as:
 - `event_type: recall`
 - `source_mode`
 - `drug_name`
+- `openfda_drug_name`
+- `rxnorm_rxcui`
+- `rxnorm_name`
+- `rxnorm_tty`
 - `classification`
 - `reason_category`
 - `recall_number`
@@ -134,7 +167,7 @@ Like SOP documents, every policy `applies_to` list should include its
 
 ## Generation Commands
 
-Generate all datasets:
+Generate the identity cache and all document datasets:
 
 ```powershell
 python -m scripts.generate_data --all
@@ -147,14 +180,16 @@ python -m scripts.generate_data --labels
 python -m scripts.generate_data --recalls
 python -m scripts.generate_data --sop
 python -m scripts.generate_data --policy
+python -m scripts.generate_data --identity
 ```
 
-Running `python -m scripts.generate_data` with no flags also generates all four
-datasets.
+Running `python -m scripts.generate_data` with no flags also builds the identity
+cache and generates all four document datasets.
 
 OpenFDA fetchers can also be run directly when lower-level options are needed:
 
 ```powershell
+python -m scripts.rag.identity.build_drug_identity_cache
 python -m scripts.rag.openfda.fetch_labels --clean
 python -m scripts.rag.openfda.fetch_recalls --clean
 python -m scripts.rag.openfda.fetch_labels --from-raw --clean
@@ -172,6 +207,7 @@ The following paths are generated outputs and are ignored by Git:
 data/rag/raw/
 data/rag/documents/
 data/rag/processed/
+data/reference/drug_identity_cache.json
 ```
 
 Commit the generation code and YAML fixtures, not the generated markdown or raw
@@ -192,6 +228,7 @@ Do not commit:
 - raw openFDA JSON
 - generated markdown documents
 - fetch manifests
+- generated RxNorm cache
 - future chunk JSONL files
 
 ## Current Scope
@@ -202,6 +239,7 @@ Included:
 
 - openFDA label raw JSON fetch
 - openFDA recall/enforcement raw JSON fetch
+- RxNorm drug identity cache generation
 - label markdown generation
 - recall notice markdown generation
 - SOP markdown generation from YAML

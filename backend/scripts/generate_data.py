@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 DATASET_COMMANDS = {
+    "identity": ["scripts.rag.identity.build_drug_identity_cache"],
     "labels": ["scripts.rag.openfda.fetch_labels", "--clean"],
     "recalls": ["scripts.rag.openfda.fetch_recalls", "--clean"],
     "sop": ["scripts.rag.sop.generate_sop_documents"],
@@ -15,6 +16,7 @@ DATASET_COMMANDS = {
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate RAG evidence documents.")
     parser.add_argument("--all", action="store_true", help="Generate all datasets.")
+    parser.add_argument("--identity", action="store_true", help="Build RxNorm drug identity cache.")
     parser.add_argument("--labels", action="store_true", help="Generate openFDA label documents.")
     parser.add_argument("--recalls", action="store_true", help="Generate openFDA recall notice documents.")
     parser.add_argument("--sop", action="store_true", help="Generate SOP documents.")

@@ -14,6 +14,8 @@ data/rag/raw/
 data/rag/documents/
 # generated processed artifacts
 data/rag/processed/
+# generated reference caches
+data/reference/drug_identity_cache.json
 
 # Environment variables
 .env
