@@ -292,10 +292,14 @@
   policy_id: POL-HITL-001
   title: Pharmacist Final Approval Policy
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  template_profile: common
   priority: HIGH
   requires_human_approval: true
   applies_to:
   - recall
+  - shortage
+  - label_update
   - final approval
   - HITL
   - pharmacist review
@@ -322,10 +326,14 @@
   policy_id: POL-SAFETY-002
   title: Unsafe Action Blocking Policy
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  template_profile: common
   priority: HIGH
   requires_human_approval: true
   applies_to:
   - recall
+  - shortage
+  - label_update
   - unsafe action
   - direct medical instruction
   - substitution recommendation
@@ -353,10 +361,14 @@
   policy_id: POL-AUDIT-001
   title: Audit Trail Requirements Policy
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  template_profile: common
   priority: MEDIUM
   requires_human_approval: false
   applies_to:
   - recall
+  - shortage
+  - label_update
   - audit log
   - traceability
   - evidence citation
@@ -416,10 +428,14 @@
   policy_id: POL-EVIDENCE-001
   title: Evidence Insufficiency Escalation Policy
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  template_profile: common
   priority: MEDIUM
   requires_human_approval: true
   applies_to:
   - recall
+  - shortage
+  - label_update
   - insufficient evidence
   - missing recall notice
   - missing policy
@@ -568,10 +584,14 @@
   policy_id: POL-COMM-002
   title: Clinical Department Communication Policy
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  template_profile: common
   priority: MEDIUM
   requires_human_approval: true
   applies_to:
   - recall
+  - shortage
+  - label_update
   - department communication
   - clinical unit notice
   - pharmacy communication

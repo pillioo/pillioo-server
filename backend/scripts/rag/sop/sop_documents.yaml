@@ -474,6 +474,8 @@
   sop_id: SOP-SAFETY-001
   title: High-Alert Medication Handling SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: HIGH
   requires_human_approval: true
   applies_to:
@@ -516,6 +518,8 @@
   sop_id: SOP-SAFETY-002
   title: Safety Check Before Approval SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: HIGH
   requires_human_approval: true
   applies_to:
@@ -559,6 +563,8 @@
   sop_id: SOP-HITL-001
   title: Pharmacist Approval Checklist SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: HIGH
   requires_human_approval: true
   applies_to:
@@ -601,6 +607,8 @@
   sop_id: SOP-EVIDENCE-001
   title: Evidence Insufficiency Escalation SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: MEDIUM
   requires_human_approval: true
   applies_to:
@@ -643,6 +651,8 @@
   sop_id: SOP-RAG-002
   title: RAG Quality Check SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: MEDIUM
   requires_human_approval: false
   applies_to:
@@ -685,6 +695,8 @@
   sop_id: SOP-REPORT-001
   title: Draft Report Generation SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: MEDIUM
   requires_human_approval: true
   applies_to:
@@ -726,6 +738,8 @@
   sop_id: SOP-AUDIT-001
   title: Audit Log Review SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: MEDIUM
   requires_human_approval: false
   applies_to:
@@ -808,6 +822,8 @@
   sop_id: SOP-INVENTORY-001
   title: Inventory Match Review SOP
   event_type: recall
+  event_types: ["recall", "shortage", "label_update"]
+  section_profiles: ["recall", "shortage", "label_update"]
   priority: MEDIUM
   requires_human_approval: true
   applies_to:

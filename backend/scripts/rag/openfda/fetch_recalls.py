@@ -111,7 +111,6 @@ def save_record_if_valid(
     if not recall_key:
         manifest_records.append({"drug": drug_name, "query": query, "source_mode": source_mode, "status": "skipped", "reason": "missing_recall_key"})
         return False, "missing_recall_key"
-
     document_id = make_document_id(record, fallback_drug_name=drug_name)
     score = score_recall_record(record, query_drug_name=query_drug_name)
     noisy_terms = get_noisy_terms(record)
@@ -135,35 +134,38 @@ def save_record_if_valid(
         "noisy_terms": noisy_terms,
         "broad_matches": broad_matches,
     }
-
     if recall_key in seen_recall_keys:
         manifest_records.append({**manifest, "status": "skipped", "reason": "duplicate"})
         return False, "duplicate"
-
     if source_mode == "broad" and noisy_terms:
         reason = "broad_noisy_terms_" + ",".join(noisy_terms)
         manifest_records.append({**manifest, "status": "skipped", "reason": reason})
         return False, reason
-
     if source_mode == "broad" and broad_drug_names and not broad_matches:
         reason = "broad_no_drug_list_match"
         manifest_records.append({**manifest, "status": "skipped", "reason": reason})
         return False, reason
-
+    if source_mode == "targeted" and query_drug_name:
+        targeted_matches = get_matching_drug_names(
+            record,
+            [query_drug_name],
+            product_only=True,
+        )
+        if not targeted_matches:
+            reason = "targeted_product_mismatch"
+            manifest_records.append({**manifest, "status": "skipped", "reason": reason})
+            return False, reason
     if score < min_score:
         manifest_records.append({**manifest, "status": "skipped", "reason": f"low_score_{score}"})
         return False, f"low_score_{score}"
-
     save_raw_record(RAW_DIR, record, document_id=document_id)
     md_path = save_markdown(record, drug_name=drug_name, source_mode=source_mode)
     seen_recall_keys.add(recall_key)
     manifest_records.append({**manifest, "status": "saved", "path": str(md_path)})
-
     print(
         f"[OK] Saved recall document: {md_path.name} "
         f"(score={score}, drug={drug_name}, mode={source_mode})"
     )
-
     return True, "saved"
 
 
@@ -439,7 +441,7 @@ def main() -> None:
     args = build_parser().parse_args()
     drug_names = load_drug_names(args.drug_list, profile="recall")
 
-    if args.clean:
+    if  args.clean or args.from_raw:
         clean_markdown_dir(DOC_DIR)
 
     seen_recall_keys: set[str] = set()

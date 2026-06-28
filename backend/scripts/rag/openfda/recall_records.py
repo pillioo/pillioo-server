@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from scripts.rag.identity.rxnorm_client import get_best_cached_drug_identity
 from scripts.rag.openfda.common import (
     get_text,
     normalize_date_yyyymmdd,
@@ -64,7 +65,6 @@ DRUG_MATCH_STOPWORDS = {
     "human",
     "hydrochloride",
     "in",
-    "sodium",
     "sulfate",
     "the",
     "with",
@@ -366,7 +366,9 @@ def recall_record_to_markdown(
     code_info = get_text(record, "code_info")
     more_code_info = get_text(record, "more_code_info")
 
-    normalized_drug_name = normalize_drug_name(fallback_drug_name)
+    fallback_normalized_drug_name = normalize_drug_name(fallback_drug_name)
+    identity = get_best_cached_drug_identity([fallback_drug_name])
+    normalized_drug_name = identity["normalized_drug_name"] or fallback_normalized_drug_name
     document_id = make_document_id(record, fallback_drug_name=fallback_drug_name)
 
     combined_text = f"{product_description}\n{code_info}\n{more_code_info}"
@@ -400,6 +402,11 @@ def recall_record_to_markdown(
         f"source_mode: {yaml_quote(source_mode)}",
         f"drug_name: {yaml_quote(normalized_drug_name)}",
         f"normalized_drug_name: {yaml_quote(normalized_drug_name)}",
+        f"openfda_drug_name: {yaml_quote(fallback_normalized_drug_name)}",
+        f"rxnorm_rxcui: {yaml_nullable(identity['rxnorm_rxcui'])}",
+        f"rxnorm_name: {yaml_nullable(identity['rxnorm_name'])}",
+        f"rxnorm_tty: {yaml_nullable(identity['rxnorm_tty'])}",
+        f"drug_identity_match_basis: {yaml_quote(identity['match_basis'])}",
         f"classification: {yaml_quote(classification)}",
         f"reason_category: {yaml_quote(reason_category)}",
         f"recall_number: {yaml_quote(recall_number)}",

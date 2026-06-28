@@ -5,8 +5,29 @@ from typing import Any
 from scripts.rag.common import normalize_block, slugify, yaml_value
 
 
+def get_event_types(policy: dict[str, Any]) -> list[str]:
+    event_types = policy.get("event_types")
+
+    if event_types is None:
+        # Keep older fixtures valid while newer indexers can prefer event_types.
+        return [str(policy["event_type"])]
+
+    if not isinstance(event_types, list) or not all(
+        isinstance(item, str) for item in event_types
+    ):
+        raise ValueError("policy.event_types must be a list of strings.")
+
+    return event_types
+
+
+def get_template_profile(policy: dict[str, Any]) -> str:
+    # Common policies apply to several event types without inheriting
+    # recall-, shortage-, or label-specific generated language.
+    return str(policy.get("template_profile") or policy["event_type"])
+
+
 def build_evidence_requirements(policy: dict[str, Any]) -> list[str]:
-    event_type = policy["event_type"]
+    template_profile = get_template_profile(policy)
 
     common = [
         "The policy document itself must be available as a cited evidence source.",
@@ -15,7 +36,10 @@ def build_evidence_requirements(policy: dict[str, Any]) -> list[str]:
         "If required evidence is missing, the ticket must not be treated as fully supported.",
     ]
 
-    if event_type == "recall":
+    if template_profile == "common":
+        return common
+
+    if template_profile == "recall":
         return common + [
             "Recall evidence should include recall_number, classification, affected_product, reason_for_recall, and recall_initiation_date when available.",
             "Inventory evidence should include match_type, NDC match result, lot match result, department, and quantity on hand.",
@@ -23,7 +47,7 @@ def build_evidence_requirements(policy: dict[str, Any]) -> list[str]:
             "If the recall notice lacks NDC or lot information, fuzzy name matching must be treated as uncertain evidence.",
         ]
 
-    if event_type == "shortage":
+    if template_profile == "shortage":
         return common + [
             "Shortage evidence should include affected drug, severity, expected duration, inventory risk, and mitigation options.",
             "Inventory evidence should include on-hand stock, usage estimate, department demand, and days-of-supply estimate.",
@@ -31,7 +55,7 @@ def build_evidence_requirements(policy: dict[str, Any]) -> list[str]:
             "If shortage severity or duration is unknown, the case should be routed to pharmacist review.",
         ]
 
-    if event_type == "label_update":
+    if template_profile == "label_update":
         return common + [
             "Label evidence should include the relevant label section such as warnings, contraindications, dosage, adverse reactions, drug interactions, or storage.",
             "The label source must include source_record_id, effective_time, and section metadata when available.",
@@ -43,7 +67,7 @@ def build_evidence_requirements(policy: dict[str, Any]) -> list[str]:
 
 
 def build_system_behavior(policy: dict[str, Any]) -> list[str]:
-    event_type = policy["event_type"]
+    template_profile = get_template_profile(policy)
     requires_human_approval = policy["requires_human_approval"]
 
     behavior = [
@@ -69,7 +93,7 @@ def build_system_behavior(policy: dict[str, Any]) -> list[str]:
             ]
         )
 
-    if event_type == "recall":
+    if template_profile == "recall":
         behavior.extend(
             [
                 "For recall events, the system should prioritize exact NDC and lot matching over fuzzy drug-name matching.",
@@ -78,7 +102,7 @@ def build_system_behavior(policy: dict[str, Any]) -> list[str]:
             ]
         )
 
-    if event_type == "shortage":
+    if template_profile == "shortage":
         behavior.extend(
             [
                 "For shortage events, the system should estimate inventory risk before suggesting mitigation language.",
@@ -87,7 +111,7 @@ def build_system_behavior(policy: dict[str, Any]) -> list[str]:
             ]
         )
 
-    if event_type == "label_update":
+    if template_profile == "label_update":
         behavior.extend(
             [
                 "For label update events, the system should prioritize warning, contraindication, dosage, interaction, and storage sections.",
@@ -111,7 +135,7 @@ def build_prohibited_actions(policy: dict[str, Any]) -> list[str]:
 
 
 def build_review_routing_rules(policy: dict[str, Any]) -> list[str]:
-    event_type = policy["event_type"]
+    template_profile = get_template_profile(policy)
 
     rules = [
         "Route to evidence_review when required evidence sources are missing or conflicting.",
@@ -120,7 +144,10 @@ def build_review_routing_rules(policy: dict[str, Any]) -> list[str]:
         "Route to final_approval when evidence is sufficient and the remaining decision is safety-critical.",
     ]
 
-    if event_type == "recall":
+    if template_profile == "common":
+        return rules
+
+    if template_profile == "recall":
         rules.extend(
             [
                 "Use no_impact_close only when recall evidence is sufficient and inventory matching returns no exact or high-confidence match.",
@@ -128,7 +155,7 @@ def build_review_routing_rules(policy: dict[str, Any]) -> list[str]:
             ]
         )
 
-    if event_type == "shortage":
+    if template_profile == "shortage":
         rules.extend(
             [
                 "Use action_review when allocation or substitution language is generated.",
@@ -136,7 +163,7 @@ def build_review_routing_rules(policy: dict[str, Any]) -> list[str]:
             ]
         )
 
-    if event_type == "label_update":
+    if template_profile == "label_update":
         rules.extend(
             [
                 "Use evidence_review when the required label section cannot be retrieved.",
@@ -159,10 +186,15 @@ def build_completion_criteria(policy: dict[str, Any]) -> list[str]:
 
 
 def render_policy_document(policy: dict[str, Any]) -> str:
+    event_types = get_event_types(policy)
+    template_profile = get_template_profile(policy)
+
     frontmatter = {
         "document_id": policy["document_id"],
         "document_type": "policy",
         "event_type": policy["event_type"],
+        "event_types": event_types,
+        "template_profile": template_profile,
         "policy_id": policy["policy_id"],
         "title": policy["title"],
         "priority": policy["priority"],

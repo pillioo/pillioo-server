@@ -84,9 +84,10 @@ def load_drug_names(
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     names: list[str] = []
 
-    if profile is not None and isinstance(payload, dict) and profile in payload:
+    if profile is not None and isinstance(payload, dict):
+        if profile not in payload:
+            raise ValueError(f"Drug list YAML is missing the '{profile}' group.")
         payload = payload[profile]
-
     if isinstance(payload, list):
         candidates = payload
     elif isinstance(payload, dict):

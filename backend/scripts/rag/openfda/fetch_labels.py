@@ -126,7 +126,7 @@ def main() -> None:
     seen_document_ids: set[str] = set()
     manifest_records: list[dict[str, Any]] = []
 
-    if args.clean:
+    if args.clean or args.from_raw:
         clean_markdown_dir(DOC_DIR)
 
     if args.from_raw:

@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from scripts.rag.identity.rxnorm_client import get_best_cached_drug_identity
 from scripts.rag.openfda.common import (
     as_list,
     clean_text,
@@ -48,7 +49,6 @@ SALT_OR_FORM_TOKENS = {
     "hydrate",
     "human",
     "monohydrate",
-    "sodium",
     "sulfate",
 }
 
@@ -305,7 +305,8 @@ def score_label_record(
         source_fields = next(
             fields for canonical, fields in SECTION_SOURCES if canonical == section
         )
-        if get_section_text(record, source_fields):
+        text = get_section_text(record, source_fields)
+        if text and not is_empty_section_text(text):
             score += weight
 
     if openfda.get("generic_name"):
@@ -374,7 +375,9 @@ def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
 
     generic_name = get_generic_name(record, fallback_name=fallback_name)
     brand_name = get_brand_name(record, fallback_name=generic_name)
-    normalized_drug_name = normalize_drug_name(generic_name)
+    fallback_normalized_drug_name = normalize_drug_name(generic_name)
+    identity = get_best_cached_drug_identity([generic_name, fallback_name, brand_name])
+    normalized_drug_name = identity["normalized_drug_name"] or fallback_normalized_drug_name
 
     product_ndc = as_list(openfda.get("product_ndc"))
     package_ndc = as_list(openfda.get("package_ndc"))
@@ -400,6 +403,11 @@ def label_record_to_markdown(record: dict[str, Any], fallback_name: str) -> str:
         f"query_match_fields: {json.dumps(get_label_query_match_fields(record, fallback_name), ensure_ascii=False)}",
         f"drug_name: {yaml_quote(normalized_drug_name)}",
         f"normalized_drug_name: {yaml_quote(normalized_drug_name)}",
+        f"openfda_drug_name: {yaml_quote(fallback_normalized_drug_name)}",
+        f"rxnorm_rxcui: {json.dumps(identity['rxnorm_rxcui'], ensure_ascii=False)}",
+        f"rxnorm_name: {json.dumps(identity['rxnorm_name'], ensure_ascii=False)}",
+        f"rxnorm_tty: {json.dumps(identity['rxnorm_tty'], ensure_ascii=False)}",
+        f"drug_identity_match_basis: {yaml_quote(identity['match_basis'])}",
         f"brand_name: {yaml_quote(brand_name)}",
         f"product_ndc: {json.dumps(product_ndc, ensure_ascii=False)}",
         f"package_ndc: {json.dumps(package_ndc, ensure_ascii=False)}",
