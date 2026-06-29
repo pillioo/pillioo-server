@@ -166,6 +166,60 @@ recall, shortage, and label update workflows. They include metadata such as:
 Like SOP documents, every policy `applies_to` list should include its
 `event_type` value.
 
+### Chunks
+
+Chunk records are generated from the markdown evidence documents.
+
+Generated chunk output is written to:
+
+```text
+data/rag/processed/evidence_chunks.jsonl
+data/rag/processed/chunk_manifest.json
+```
+
+Chunk sizes and token counts are prepared for the configured embedding model
+(`EMBEDDING_MODEL`, default `text-embedding-3-small`). When `tiktoken` is
+installed, the chunker uses that tokenizer for splitting and counting;
+otherwise it falls back to a character-based token estimate and records that
+method in the manifest.
+
+Each chunk record includes retrieval and citation fields such as:
+
+- `chunk_id`
+- `document_id`
+- `document_type`
+- `event_type`
+- `event_types`
+- `section`
+- `section_title`
+- `title`
+- `content`
+- `source_path`
+- `chunk_index`
+- `token_count`
+- `drug_name`
+- `normalized_drug_name`
+- `rxnorm_rxcui`
+- `classification`
+- `ndc`
+- `metadata`
+
+The chunker parses frontmatter as metadata, splits markdown by `##` section,
+keeps retrieval-relevant sections for each document type, and enforces
+document-type token limits with sentence-aware overlap between split chunks.
+Each chunk content starts with a compact section context prefix such as
+`DOSAGE AND ADMINISTRATION - Example Label.` so retrieved evidence remains
+readable outside the full source document.
+
+For label documents, top-level `ndc` is derived from `product_ndc` and
+`package_ndc` when an explicit frontmatter `ndc` is absent. Recall chunks also
+carry filter-oriented metadata such as recall status, recalling firm, initiation
+and termination dates, reason category, distribution pattern, and product
+quantity when those values are available.
+
+The manifest records aggregate quality signals such as `min_token_count`,
+`max_token_count`, and `avg_token_count`.
+
 ## Generation Commands
 
 Generate the identity cache and all document datasets:
@@ -182,6 +236,7 @@ python -m scripts.generate_data --recalls
 python -m scripts.generate_data --sop
 python -m scripts.generate_data --policy
 python -m scripts.generate_data --identity
+python -m scripts.generate_data --chunks
 ```
 
 Running `python -m scripts.generate_data` with no flags also builds the identity
@@ -195,6 +250,7 @@ python -m scripts.rag.openfda.fetch_labels --clean
 python -m scripts.rag.openfda.fetch_recalls --clean
 python -m scripts.rag.openfda.fetch_labels --from-raw --clean
 python -m scripts.rag.openfda.fetch_recalls --from-raw --clean
+python -m scripts.rag.chunking.build_chunks --clean
 ```
 
 Use `--from-raw` to rebuild markdown from saved raw JSON without calling the
@@ -245,12 +301,13 @@ Included:
 - recall notice markdown generation
 - SOP markdown generation from YAML
 - policy markdown generation from YAML
+- evidence chunk JSONL generation
+- chunk manifest generation
 - consistent frontmatter metadata
 - safe reruns with clean generated outputs
 
 Out of scope:
 
-- chunking
 - embedding generation
 - Milvus insertion
 - retrieval API
