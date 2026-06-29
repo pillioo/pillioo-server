@@ -86,9 +86,23 @@ def detect_category(sentence: str) -> BlockedCategory | None:
     return None
 
 
+def _find_sentence_spans(text: str) -> list[tuple[int, int]]:
+    """
+    텍스트에서 문장의 시작/끝 위치(span)를 찾아 반환.
+    줄바꿈 또는 마침표/느낌표 뒤 공백을 기준으로 분리.
+    원본 텍스트의 위치 정보를 보존해서 나중에 정확히 교체할 수 있게 함.
+    """
+    spans = []
+    # 줄바꿈 또는 마침표/느낌표 뒤 공백 기준으로 분리
+    for match in re.finditer(r'[^\n]+', text):
+        spans.append((match.start(), match.end()))
+    return spans
+
+
 def draft_safety_check(draft_text: str) -> SafetyCheckResult:
     """
-    보고서 초안을 문장 단위로 검사해서 위험 문장을 차단.
+    보고서 초안을 문장 단위로 검사해서 위험 문장만 교체.
+    위험하지 않은 문장과 원본 줄바꿈/공백은 그대로 보존.
 
     Orchestrator가 draft 생성 후 이 함수를 호출.
 
@@ -98,57 +112,43 @@ def draft_safety_check(draft_text: str) -> SafetyCheckResult:
     Returns:
         SafetyCheckResult:
             - blocked_sentences: 차단된 문장 목록 (원문, 카테고리, 대체문)
-            - revised_draft: 위험 문장이 대체된 수정 초안
+            - revised_draft: 위험 문장만 교체된 수정 초안 (나머지 포맷 보존)
             - needs_action_review: 차단된 문장이 하나라도 있으면 True
 
     예시:
         입력:
-            "ICU 담당자께 안내드립니다.
-             해당 lot은 격리 구역으로 이동하시고,
-             즉시 투여를 중단하세요.
-             전량 폐기하세요."
+            "ICU 담당자께 안내드립니다.\n해당 lot은 격리 구역으로 이동하시고,\n즉시 투여를 중단하세요.\n전량 폐기하세요."
 
         출력:
             blocked_sentences: [
-                BlockedSentence(
-                    original="즉시 투여를 중단하세요.",
-                    category="direct_medical_instruction",
-                    replaced_with="담당 약사 확인 후 조치하세요."
-                ),
-                BlockedSentence(
-                    original="전량 폐기하세요.",
-                    category="disposal_instruction",
-                    replaced_with="담당 약사 확인 후 조치하세요."
-                )
+                BlockedSentence(original="즉시 투여를 중단하세요.", ...),
+                BlockedSentence(original="전량 폐기하세요.", ...)
             ]
-            revised_draft: "ICU 담당자께 안내드립니다.
-                            해당 lot은 격리 구역으로 이동하시고,
-                            담당 약사 확인 후 조치하세요.
-                            담당 약사 확인 후 조치하세요."
+            revised_draft:
+                "ICU 담당자께 안내드립니다.\n해당 lot은 격리 구역으로 이동하시고,\n담당 약사 확인 후 조치하세요.\n담당 약사 확인 후 조치하세요."
             needs_action_review: True
     """
-    sentences = split_sentences(draft_text)
     blocked_sentences = []
-    revised_sentences = []
+    spans = _find_sentence_spans(draft_text)
 
-    for sentence in sentences:
+    # 원본 텍스트를 그대로 복사해두고 위험 문장만 교체
+    revised_draft = draft_text
+
+    # 뒤에서부터 교체해야 앞 문장의 위치(offset)가 안 밀림
+    for start, end in reversed(spans):
+        sentence = draft_text[start:end]
         category = detect_category(sentence)
 
         if category:
-            # 위험 문장 → 차단 목록에 추가하고 대체문으로 교체
-            blocked_sentences.append(
+            blocked_sentences.insert(
+                0,
                 BlockedSentence(
                     original=sentence,
                     category=category,
                     replaced_with=REPLACEMENT,
                 )
             )
-            revised_sentences.append(REPLACEMENT)
-        else:
-            # 안전한 문장 → 그대로 유지
-            revised_sentences.append(sentence)
-
-    revised_draft = "\n".join(revised_sentences)
+            revised_draft = revised_draft[:start] + REPLACEMENT + revised_draft[end:]
 
     return SafetyCheckResult(
         blocked_sentences=blocked_sentences,

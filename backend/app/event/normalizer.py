@@ -80,20 +80,61 @@ def normalize_drug_name(raw_name: str) -> str:
 def normalize_ndc(raw_ndc: str) -> str:
     """
     다양한 형식의 NDC를 11자리 표준 형식으로 변환.
+    세그먼트 구조를 인식해서 올바른 자리에 0을 채움.
+
+    FDA NDC 형식 3가지:
+        4-4-2 → labeler(4) + product(4) + package(2) → labeler에 0 1개 추가
+        5-3-2 → labeler(5) + product(3) + package(2) → product에 0 1개 추가
+        5-4-1 → labeler(5) + product(4) + package(1) → package에 0 1개 추가
 
     예시:
-        "0641-6014-41"  → "00641601441"  (4-4-2 형식)
-        "641-6014-41"   → "00641601441"  (3-4-2 형식)
-        "064160141"     → "00641601441"  (하이픈 없는 9자리)
+        "0641-6014-41"   → "00641601441"  (4-4-2)
+        "12345-678-90"   → "12345067890"  (5-3-2)
+        "12345-6789-1"   → "12345678901"  (5-4-1)
+        "00641601441"    → "00641601441"  (이미 11자리)
     """
-    # 하이픈 및 공백 제거
-    digits = re.sub(r'[-\s]', '', raw_ndc).strip()
+    raw_ndc = raw_ndc.strip()
 
-    # 11자리 미만이면 앞에 0 붙이기
-    if len(digits) < 11:
-        digits = digits.zfill(11)
+    # 하이픈이 있으면 세그먼트 구조 인식
+    if "-" in raw_ndc:
+        segments = raw_ndc.split("-")
 
-    # 11자리 초과이면 오류
+        if len(segments) != 3:
+            raise ValueError(
+                f"NDC must have 3 segments separated by hyphens. "
+                f"Received: {raw_ndc!r}"
+            )
+
+        labeler, product, package = segments
+        seg_lengths = (len(labeler), len(product), len(package))
+
+        # 세그먼트 길이 기준으로 0 패딩 위치 결정
+        if seg_lengths == (4, 4, 2):
+            # 4-4-2 → labeler 앞에 0 추가
+            labeler = labeler.zfill(5)
+        elif seg_lengths == (5, 3, 2):
+            # 5-3-2 → product 앞에 0 추가
+            product = product.zfill(4)
+        elif seg_lengths == (5, 4, 1):
+            # 5-4-1 → package 앞에 0 추가
+            package = package.zfill(2)
+        elif seg_lengths == (5, 4, 2):
+            # 이미 올바른 형식
+            pass
+        else:
+            raise ValueError(
+                f"Unrecognized NDC segment pattern {seg_lengths}. "
+                f"Received: {raw_ndc!r}"
+            )
+
+        digits = labeler + product + package
+
+    else:
+        # 하이픈 없는 경우 — 자리수로 판단
+        digits = re.sub(r'\s', '', raw_ndc)
+        if len(digits) < 11:
+            digits = digits.zfill(11)
+
     if len(digits) != 11:
         raise ValueError(
             f"NDC must be 11 digits after normalization. "

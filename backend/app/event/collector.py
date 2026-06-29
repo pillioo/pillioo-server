@@ -17,8 +17,8 @@ OPENFDA_RECALL_URL = "https://api.fda.gov/drug/enforcement.json"
 OPENFDA_SHORTAGE_URL = "https://api.fda.gov/drug/shortages.json"
 OPENFDA_LABEL_URL = "https://api.fda.gov/drug/label.json"
 
-# 샘플 데이터 경로
-SAMPLE_DATA_PATH = Path("data/event/recall_samples.json")
+# 샘플 데이터 경로 — __file__ 기준으로 resolve해서 실행 위치 무관하게 동작
+SAMPLE_DATA_PATH = Path(__file__).parent.parent.parent.parent / "data" / "event" / "recall_samples.json"
 
 
 def fetch_recall_events(limit: int = 10) -> list[dict]:
