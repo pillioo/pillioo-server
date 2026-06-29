@@ -22,16 +22,10 @@ def check_and_save_event(event_id: str) -> DedupResponse:
         _mock_processed_events.add(event_id)
         return DedupResponse(duplicated=False)
     
-# 코드리뷰 반영 : 새로 함수 2개로 추가 (#24)
-def is_duplicate(event_id: str) -> bool:
-    """중복 여부만 확인 (저장 안 함)"""
+def release_event(event_id: str) -> None:
+    """티켓 생성 실패 시 rollback용 — 예약 취소"""
     with _mock_processed_events_lock:
-        return event_id in _mock_processed_events
-
-def save_event(event_id: str) -> None:
-    """처리 완료 후 저장"""
-    with _mock_processed_events_lock:
-        _mock_processed_events.add(event_id)
+        _mock_processed_events.discard(event_id)
 
 # --- 개발자용 로컬 테스트 코드 ---
 if __name__ == "__main__":
