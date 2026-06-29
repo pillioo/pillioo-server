@@ -10,6 +10,7 @@ DATASET_COMMANDS = {
     "recalls": ["scripts.rag.openfda.fetch_recalls", "--clean"],
     "sop": ["scripts.rag.sop.generate_sop_documents"],
     "policy": ["scripts.rag.policy.generate_policy_documents"],
+    "chunks": ["scripts.rag.chunking.build_chunks", "--clean"],
 }
 
 
@@ -21,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--recalls", action="store_true", help="Generate openFDA recall notice documents.")
     parser.add_argument("--sop", action="store_true", help="Generate SOP documents.")
     parser.add_argument("--policy", action="store_true", help="Generate policy documents.")
+    parser.add_argument("--chunks", action="store_true", help="Generate chunked evidence JSONL.")
     return parser
 
 
