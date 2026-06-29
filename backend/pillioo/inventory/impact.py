@@ -8,10 +8,10 @@ from app.schemas.common import Department, Priority
 
 def assess_impact(match_result: Dict[str, Any]) -> Dict[str, Any]:
 
-    # #1. 매칭된 데이터 추출 및 초기화
+    #1. 매칭된 데이터 추출 및 초기화
     matched_rows = match_result.get("matched_rows", [])
     
-    # #2. 매칭 결과가 없을 경우 기본값 반환
+    #2. 매칭 결과가 없을 경우 기본값 반환
     if not match_result.get("matched", False) or not matched_rows:
         return {
             "affected_departments": [],
@@ -22,22 +22,25 @@ def assess_impact(match_result: Dict[str, Any]) -> Dict[str, Any]:
             "urgent_reason": "No matched inventory found."
         }
     
-    # #3. 분석을 위한 DataFrame 변환
+    #3. 분석을 위한 DataFrame 변환
     df = pd.DataFrame(matched_rows)
+    df["department"] = df["department"].apply(
+        lambda dept: dept.value if isinstance(dept, Department) else str(dept).strip()
+        )
     df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
     
-    # #4. 병동(department)별 수량 집계
+    #4. 병동(department)별 수량 집계
     breakdown_df = df.groupby("department")["quantity"].sum()
     department_breakdown = breakdown_df.to_dict()
     
     affected_departments = sorted(list(department_breakdown.keys()))
     total_quantity = int(df["quantity"].sum())
     
-    # #5. Priority(우선순위) 결정: ICU/ER 포함 여부 (Enum 사용)
+    #5. Priority(우선순위) 결정: ICU/ER 포함 여부 (Enum 사용)
     high_priority_depts = [Department.ICU.value, Department.ER.value]
     priority = Priority.HIGH.value if any(dept in affected_departments for dept in high_priority_depts) else Priority.MEDIUM.value
     
-    # #6. Urgent(긴급도) 판단: days_remaining이 3 이하인 경우
+    #6. Urgent(긴급도) 판단: days_remaining이 3 이하인 경우
     urgent = False
     urgent_reason = ""
     

@@ -4,16 +4,23 @@ from rapidfuzz import fuzz
 
 from app.schemas.common import MatchType 
 
-def inventory_match(drug_name: str, ndc: str, lot: str) -> dict:
+# P1에서 정규화된 약물 정보를 바탕으로 병원 재고(CSV)와 매칭한다.
 
-    # P1에서 정규화된 약물 정보를 바탕으로 병원 재고(CSV)와 매칭한다.
+def inventory_match(drug_name: str, ndc: str, lot: str) -> dict:
 
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         csv_path = os.path.join(current_dir, "mock_data", "inventory.csv")
         df = pd.read_csv(csv_path)
     except FileNotFoundError:
-        return {"error": f"{csv_path} 파일을 찾을 수 없습니다."}
+        return {
+            "matched": False,
+            "match_type": MatchType.NO_MATCH.value,
+            "match_confidence": 0.0,
+            "needs_identity_review": False,
+            "matched_rows": [],
+            "error": f"{csv_path} 파일을 찾을 수 없습니다.",
+        }
 
     df['ndc'] = df['ndc'].fillna('')
     df['drug_name'] = df['drug_name'].fillna('')
