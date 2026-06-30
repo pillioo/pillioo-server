@@ -27,14 +27,15 @@ class MarkdownSection:
 
 
 def parse_markdown_document(path: Path) -> ParsedDocument:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     if not text.startswith("---\n"):
         raise ValueError(f"Markdown document is missing frontmatter: {path}")
 
-    try:
-        _empty, frontmatter_text, body = text.split("---\n", 2)
-    except ValueError as exc:
-        raise ValueError(f"Markdown document has malformed frontmatter: {path}") from exc
+    match = re.match(r"^---\n(.*?)\n---\n?(.*)$", text, flags=re.DOTALL)
+    if not match:
+        raise ValueError(f"Markdown document has malformed frontmatter: {path}")
+
+    frontmatter_text, body = match.groups()
 
     frontmatter = yaml.safe_load(frontmatter_text)
     if not isinstance(frontmatter, dict):
@@ -78,6 +79,16 @@ def split_markdown_sections(body: str) -> list[MarkdownSection]:
         return [MarkdownSection(section="document", section_title="Document", content=content)] if content else []
 
     sections: list[MarkdownSection] = []
+    preamble = remove_h1(body[: matches[0].start()]).strip()
+    if preamble:
+        sections.append(
+            MarkdownSection(
+                section="overview",
+                section_title="Overview",
+                content=preamble,
+            )
+        )
+
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(body)

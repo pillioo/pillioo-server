@@ -24,7 +24,7 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 TOKEN_ENCODING_NAME = "cl100k_base"
 TOKEN_COUNT_METHOD = "tiktoken" if tiktoken is not None else "char_estimate"
 
-VALID_DOCUMENT_TYPES = {"label", "recall_notice", "sop", "policy", "shortage_notice"}
+VALID_DOCUMENT_TYPES = {"label", "recall_notice", "sop", "policy"}
 VALID_EVENT_TYPES = {"recall", "shortage", "label_update"}
 DOCUMENT_TYPE_DIRS = ["label", "recall_notice", "sop", "policy"]
 
@@ -35,7 +35,6 @@ MAX_SECTION_CHARS = {
     "recall_notice": 2_000,
     "sop": 2_400,
     "policy": 2_400,
-    "shortage_notice": 2_000,
 }
 OVERLAP_CHARS = 280
 OVERLAP_TOKENS = 64
@@ -45,7 +44,6 @@ MAX_SECTION_TOKENS = {
     "recall_notice": 512,
     "sop": 600,
     "policy": 600,
-    "shortage_notice": 512,
 }
 DEFAULT_MAX_SECTION_TOKENS = 512
 
@@ -56,6 +54,7 @@ MAX_MERGE_TOKENS = 600
 # filling the vector index with legal boilerplate and low-signal label sections.
 SECTION_INCLUDE_BY_TYPE = {
     "label": {
+        "overview",
         "boxed_warning",
         "warnings",
         "contraindications",
@@ -68,6 +67,7 @@ SECTION_INCLUDE_BY_TYPE = {
         "storage_and_handling",
     },
     "sop": {
+        "overview",
         "required_inputs",
         "evidence_requirements",
         "procedure",
@@ -78,6 +78,7 @@ SECTION_INCLUDE_BY_TYPE = {
         "completion_criteria",
     },
     "policy": {
+        "overview",
         "policy_statement",
         "evidence_requirements",
         "required_actions",

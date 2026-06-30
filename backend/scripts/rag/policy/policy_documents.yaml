@@ -183,7 +183,7 @@
   - Identify the affected drug, severity, expected duration, and available inventory.
   - Estimate days of supply using current usage and on-hand stock.
   - Prioritize emergency, ICU, OR, and other critical-use departments when clinically appropriate.
-  - Retrieve shortage notice, label, policy, and SOP evidence.
+  - Retrieve shortage event, label, policy, and SOP evidence when available.
   - Prepare a mitigation summary for pharmacist review.
   escalation_criteria:
   - Severity is high or critical.

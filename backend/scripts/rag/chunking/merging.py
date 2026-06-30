@@ -31,32 +31,32 @@ def merge_small_chunks(
         if i + 1 < len(result):
             nxt = result[i + 1]
             merge_limit = get_merge_token_limit(chunk, nxt, default=max_tokens)
+            merged_content = chunk["content"] + "\n\n" + strip_chunk_context_prefix(nxt["content"])
+            merged_tokens = count_tokens(merged_content)
             if (
                 nxt["document_id"] == chunk["document_id"]
                 and nxt["section"] == chunk["section"]
-                and chunk["token_count"] + nxt["token_count"] <= merge_limit
+                and merged_tokens <= merge_limit
             ):
-                merged_content = chunk["content"] + "\n\n" + strip_chunk_context_prefix(nxt["content"])
                 nxt["content"] = merged_content
-                new_tokens = count_tokens(merged_content)
-                nxt["token_count"] = new_tokens
-                nxt["metadata"]["chunk_tokens_estimate"] = new_tokens
+                nxt["token_count"] = merged_tokens
+                nxt["metadata"]["chunk_tokens_estimate"] = merged_tokens
                 result.pop(i)
                 merged = True
 
         if not merged and i > 0:
             prev = result[i - 1]
             merge_limit = get_merge_token_limit(prev, chunk, default=max_tokens)
+            merged_content = prev["content"] + "\n\n" + strip_chunk_context_prefix(chunk["content"])
+            merged_tokens = count_tokens(merged_content)
             if (
                 prev["document_id"] == chunk["document_id"]
                 and prev["section"] == chunk["section"]
-                and prev["token_count"] + chunk["token_count"] <= merge_limit
+                and merged_tokens <= merge_limit
             ):
-                merged_content = prev["content"] + "\n\n" + strip_chunk_context_prefix(chunk["content"])
                 prev["content"] = merged_content
-                new_tokens = count_tokens(merged_content)
-                prev["token_count"] = new_tokens
-                prev["metadata"]["chunk_tokens_estimate"] = new_tokens
+                prev["token_count"] = merged_tokens
+                prev["metadata"]["chunk_tokens_estimate"] = merged_tokens
                 result.pop(i)
                 merged = True
 

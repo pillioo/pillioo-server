@@ -25,18 +25,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    tmp_output = args.output.with_suffix(f"{args.output.suffix}.tmp")
+    tmp_manifest = args.manifest.with_suffix(f"{args.manifest.suffix}.tmp")
     if args.clean:
-        clean_outputs(args.output, args.manifest)
+        clean_outputs(args.output, args.manifest, tmp_output, tmp_manifest)
 
     chunks, manifest = build_chunks(args.documents_dir)
-    chunks_path = write_jsonl(chunks, args.output)
-    manifest_path = write_manifest(manifest, args.manifest)
+    write_jsonl(chunks, tmp_output).replace(args.output)
+    write_manifest(manifest, tmp_manifest).replace(args.manifest)
 
     print("[SUMMARY]")
     print(f"documents={manifest['total_documents']}")
     print(f"chunks={manifest['total_chunks']}")
-    print(f"chunk_path={chunks_path}")
-    print(f"manifest_path={manifest_path}")
+    print(f"chunk_path={args.output}")
+    print(f"manifest_path={args.manifest}")
     print(f"warnings={len(manifest['warnings'])}")
 
 

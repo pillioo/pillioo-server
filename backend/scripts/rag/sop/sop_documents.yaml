@@ -198,10 +198,10 @@
     drug shortage event. It supports consistent estimation of operational
     impact before any allocation or mitigation plan is drafted.
   trigger: |-
-    Use this SOP when a shortage notice indicates current or anticipated
+    Use this SOP when a shortage event record indicates current or anticipated
     limited supply of a medication stocked by the institution.
   required_inputs:
-  - Shortage notice with affected drug, severity, expected duration, and mitigation notes.
+  - Shortage event record with affected drug, severity, expected duration, and mitigation notes.
   - Current inventory quantity by department or storage location.
   - Recent usage estimate or average daily consumption.
   - Medication criticality and department priority.
@@ -243,7 +243,7 @@
     medication, alternative strength, alternative route, or conservation
     strategy that may affect clinical medication use.
   required_inputs:
-  - Shortage notice or shortage event record.
+  - Shortage event record.
   - Affected medication label evidence when available.
   - Policy evidence for therapeutic substitution approval.
   - Draft response text.
@@ -284,7 +284,7 @@
     Use this SOP when a shortage event may require prioritization of
     limited supply across departments or care settings.
   required_inputs:
-  - Shortage notice.
+  - Shortage event record.
   - Inventory quantity and usage estimate.
   - Department demand profile.
   - Policy evidence for shortage allocation.
@@ -337,7 +337,7 @@
   - Estimate department-level risk using quantity and usage assumptions.
   - Summarize confirmed impact separately from anticipated risk.
   - Avoid recommending allocation changes without pharmacist approval.
-  - Attach citations from shortage notice and policy evidence.
+  - Attach citations from shortage event and policy evidence.
   exception_handling:
   - If department usage is unavailable, mark impact estimate as uncertain.
   - If shortage duration is unknown, route to evidence_review.
@@ -497,7 +497,7 @@
     insulin, electrolyte, or procedural medication workflows.
   required_inputs:
   - Affected drug name and medication class.
-  - Event evidence such as recall notice, shortage notice, or label section.
+  - Event evidence such as recall notice, shortage event details, or label section.
   - Policy evidence for high-alert medication review.
   - Draft response text and safety check result.
   procedure:
@@ -641,7 +641,7 @@
   procedure:
   - Compare required_sources against found_sources.
   - Confirm that missing_sources is consistent with evidence_status.
-  - Identify whether the missing source is recall_notice, label, policy, SOP, or shortage_notice.
+  - Identify whether the missing source is recall_notice, label, policy, or SOP.
   - Generate a cautious summary stating which evidence is missing.
   - Do not generate confident operational conclusions when evidence is insufficient.
   - Route the ticket to evidence_review.

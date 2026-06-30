@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-DocumentType = Literal["label", "recall_notice", "sop", "policy", "shortage_notice"]
+DocumentType = Literal["label", "recall_notice", "sop", "policy"]
 EventType = Literal["recall", "shortage", "label_update"]
 
 
@@ -29,7 +29,7 @@ class EvidenceChunk(BaseModel):
     normalized_drug_name: str | None = None
     rxnorm_rxcui: str | None = None
     classification: str | None = None
-    ndc: str | list[str] | None = None
+    ndc: list[str] | None = None
     lot: str | None = None
     recall_number: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -82,20 +82,36 @@ def build_chunk_record(
 
 
 def get_top_level_metadata_value(frontmatter: dict[str, Any], field: str) -> Any:
-    if field != "ndc" or frontmatter.get("ndc"):
+    if field != "ndc":
         return frontmatter.get(field)
+
+    explicit_ndc = normalize_string_list(frontmatter.get("ndc"))
+    if explicit_ndc:
+        return explicit_ndc
 
     # Label documents expose product/package NDCs separately; duplicating a
     # representative combined list at top level makes pre-filtering simpler.
     ndc_values: list[str] = []
     for source_field in ["product_ndc", "package_ndc"]:
-        value = frontmatter.get(source_field)
-        values = value if isinstance(value, list) else [value]
-        for item in values:
-            if item and str(item) not in ndc_values:
-                ndc_values.append(str(item))
+        for item in normalize_string_list(frontmatter.get(source_field)):
+            if item not in ndc_values:
+                ndc_values.append(item)
 
     return ndc_values or None
+
+
+def normalize_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    result: list[str] = []
+    for item in values:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text and text not in result:
+            result.append(text)
+    return result
 
 
 def add_chunk_context_prefix(document: ParsedDocument, section: MarkdownSection, content: str) -> str:
@@ -134,7 +150,8 @@ def chunk_document(document: ParsedDocument) -> tuple[list[dict[str, Any]], list
     for section in sections:
         # Reserve token budget for the context prefix added to every chunk.
         prefix = build_chunk_context_prefix(document=document, section=section)
-        split_max_tokens = max(128, max_tokens - count_tokens(prefix))
+        prefix_budget = count_tokens(f"{prefix}\n")
+        split_max_tokens = max(1, max_tokens - prefix_budget)
         split_max_chars = max(400, max_chars - len(prefix))
         pieces = split_section_content(
             section.content,
@@ -144,13 +161,13 @@ def chunk_document(document: ParsedDocument) -> tuple[list[dict[str, Any]], list
         for piece in pieces:
             if not piece.strip():
                 continue
-            prefixed_piece = add_chunk_context_prefix(document=document, section=section, content=piece)
-            if count_tokens(prefixed_piece) > max_tokens * 1.25:
-                warnings.append(
+            chunk = build_chunk_record(document, section, piece, chunk_index)
+            if int(chunk["token_count"]) > max_tokens:
+                raise ValueError(
                     f"{relative_source_path(document.path)} section {section.section} "
-                    f"has chunk over target size"
+                    f"exceeded token limit: {chunk['token_count']} > {max_tokens}"
                 )
-            chunks.append(build_chunk_record(document, section, piece, chunk_index))
+            chunks.append(chunk)
             chunk_index += 1
 
     if not chunks:
@@ -161,7 +178,7 @@ def chunk_document(document: ParsedDocument) -> tuple[list[dict[str, Any]], list
 
 def get_chunkable_sections(document: ParsedDocument) -> list[MarkdownSection]:
     document_type = str(document.frontmatter["document_type"])
-    if document_type in {"recall_notice", "shortage_notice"}:
+    if document_type == "recall_notice":
         content = remove_h1(document.body)
         return (
             [MarkdownSection(section=document_type, section_title=document.title, content=content)]
