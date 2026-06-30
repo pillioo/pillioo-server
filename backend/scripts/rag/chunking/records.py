@@ -85,6 +85,8 @@ def get_top_level_metadata_value(frontmatter: dict[str, Any], field: str) -> Any
     if field != "ndc" or frontmatter.get("ndc"):
         return frontmatter.get(field)
 
+    # Label documents expose product/package NDCs separately; duplicating a
+    # representative combined list at top level makes pre-filtering simpler.
     ndc_values: list[str] = []
     for source_field in ["product_ndc", "package_ndc"]:
         value = frontmatter.get(source_field)
@@ -97,6 +99,7 @@ def get_top_level_metadata_value(frontmatter: dict[str, Any], field: str) -> Any
 
 
 def add_chunk_context_prefix(document: ParsedDocument, section: MarkdownSection, content: str) -> str:
+    """Add enough context for a retrieved chunk to stand alone in citations."""
     prefix = build_chunk_context_prefix(document=document, section=section)
     if content.startswith(prefix):
         return content
@@ -129,6 +132,7 @@ def chunk_document(document: ParsedDocument) -> tuple[list[dict[str, Any]], list
 
     chunk_index = 0
     for section in sections:
+        # Reserve token budget for the context prefix added to every chunk.
         prefix = build_chunk_context_prefix(document=document, section=section)
         split_max_tokens = max(128, max_tokens - count_tokens(prefix))
         split_max_chars = max(400, max_chars - len(prefix))

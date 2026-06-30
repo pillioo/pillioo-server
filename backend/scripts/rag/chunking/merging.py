@@ -17,6 +17,7 @@ def merge_small_chunks(
     min_tokens: int = MIN_CHUNK_TOKENS,
     max_tokens: int = MAX_MERGE_TOKENS,
 ) -> list[dict[str, Any]]:
+    """Merge tiny neighboring chunks without crossing document/section bounds."""
     result = list(chunks)
     i = 0
     while i < len(result):
@@ -66,6 +67,7 @@ def merge_small_chunks(
 
 
 def get_merge_token_limit(left: dict[str, Any], right: dict[str, Any], default: int) -> int:
+    """Respect stricter per-document token limits during post-split merging."""
     document_type = str(left.get("document_type") or right.get("document_type") or "")
     return min(default, MAX_SECTION_TOKENS.get(document_type, DEFAULT_MAX_SECTION_TOKENS))
 

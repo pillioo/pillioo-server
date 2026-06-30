@@ -28,6 +28,8 @@ VALID_DOCUMENT_TYPES = {"label", "recall_notice", "sop", "policy", "shortage_not
 VALID_EVENT_TYPES = {"recall", "shortage", "label_update"}
 DOCUMENT_TYPE_DIRS = ["label", "recall_notice", "sop", "policy"]
 
+# Character windows are still used as a first pass because openFDA text often
+# arrives as long unbroken paragraphs. Token limits below remain the hard cap.
 MAX_SECTION_CHARS = {
     "label": 2_000,
     "recall_notice": 2_000,
@@ -50,6 +52,8 @@ DEFAULT_MAX_SECTION_TOKENS = 512
 MIN_CHUNK_TOKENS = 30
 MAX_MERGE_TOKENS = 600
 
+# Keep only sections that are likely to answer retrieval questions. This avoids
+# filling the vector index with legal boilerplate and low-signal label sections.
 SECTION_INCLUDE_BY_TYPE = {
     "label": {
         "boxed_warning",
@@ -96,6 +100,8 @@ TOP_LEVEL_METADATA_FIELDS = [
     "recall_number",
 ]
 
+# Fields here remain available for filters/citations without crowding the
+# top-level chunk schema used by common retrieval paths.
 NESTED_METADATA_FIELDS = [
     "lot_scope",
     "status",

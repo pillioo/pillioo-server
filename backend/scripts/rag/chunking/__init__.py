@@ -1,1 +1,1 @@
-from scripts.rag.chunking.core import *  # noqa: F403
+"""Evidence chunking package."""

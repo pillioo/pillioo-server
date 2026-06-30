@@ -17,6 +17,7 @@ _TABLE_ROW_END_RE = re.compile(r"(\b\d{2,3}(?:\.\d+)?)\s+([A-Z][a-z]{5,})")
 
 
 def preprocess_table_content(content: str) -> str:
+    """Recover paragraph breaks in dense openFDA table text before splitting."""
     content = _TABLE_MARKER_RE.sub("\n\n", content)
     content = _CONCENTRATION_AFTER_NUMBER_RE.sub(r"\1\n\n\2", content)
     content = _TABLE_ROW_END_RE.sub(r"\1\n\n\2", content)
@@ -75,6 +76,7 @@ def split_section_content(
 
 
 def token_aware_max_chars(text: str, max_chars: int, max_tokens: int) -> int:
+    """Shrink char windows for numeric/NDC-heavy text where tokens are denser."""
     tokens = count_tokens(text)
     if tokens == 0:
         return max_chars
@@ -84,6 +86,7 @@ def token_aware_max_chars(text: str, max_chars: int, max_tokens: int) -> int:
 
 
 def enforce_token_limit(chunks: list[str], max_tokens: int, overlap_tokens: int) -> list[str]:
+    """Apply the token ceiling after all paragraph and sentence heuristics."""
     limited_chunks: list[str] = []
     for chunk in chunks:
         if count_tokens(chunk) <= max_tokens:
@@ -157,6 +160,7 @@ def split_long_text(text: str, max_chars: int, overlap_chars: int) -> list[str]:
 
 
 def find_sentence_start_near(text: str, overlap_start: int, previous_end: int) -> int:
+    """Prefer a sentence boundary over a mid-word overlap start."""
     window = text[overlap_start:previous_end]
     match = re.search(r"(?:[.;:]\s+|\n+)(\S)", window)
     if match:
