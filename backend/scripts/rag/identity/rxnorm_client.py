@@ -45,15 +45,18 @@ def _normalization_variants(name: str) -> list[tuple[str, str]]:
         variants.append((stripped_vehicle, "rxnorm_exact_stripped_vehicle"))
 
     # Normalise "X and Y" → "X/Y" (RxNorm uses "/" for combinations)
-    normalised_combo = re.sub(r"\s+and\s+", "/", name, flags=re.IGNORECASE)
-    if normalised_combo != name:
-        variants.append((normalised_combo, "rxnorm_exact_normalised_combination"))
+    variant_bases = [(name, ""), (stripped_vehicle, "_stripped_vehicle")]
+    for base_name, basis_suffix in variant_bases:
+        normalised_combo = re.sub(r"\s+and\s+", "/", base_name, flags=re.IGNORECASE)
+        if normalised_combo == base_name:
+            continue
+        variants.append((normalised_combo, f"rxnorm_exact_normalised_combination{basis_suffix}"))
 
         # Strip salt forms from each component of the normalised combination
         components = [_SALT_SUFFIXES.sub("", c.strip()) for c in normalised_combo.split("/")]
         desalted = "/".join(c for c in components if c)
         if desalted != normalised_combo:
-            variants.append((desalted, "rxnorm_exact_desalted_combination"))
+            variants.append((desalted, f"rxnorm_exact_desalted_combination{basis_suffix}"))
 
     return variants
 
