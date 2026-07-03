@@ -1,0 +1,45 @@
+- id: fentanyl_recall_reason
+  query: "Find the reason for the 2024 superpotent fentanyl Class I recall."
+  top_k: 5
+  filter: 'document_type == "recall_notice" and normalized_drug_name == "fentanyl"'
+  expected:
+    document_type: recall_notice
+    event_type: recall
+    recall_number: D-0277-2024
+    classification: class_i
+    content_contains:
+      - superpotent
+
+- id: piperacillin_tazobactam_label
+  query: "What label evidence is available for piperacillin tazobactam?"
+  top_k: 5
+  filter: 'document_type == "label" and rxnorm_rxcui == "74169"'
+  expected:
+    document_type: label
+    event_type: label_update
+    rxnorm_rxcui: "74169"
+
+- id: warfarin_warning_or_contraindication
+  query: "What warnings or contraindications are relevant for warfarin sodium?"
+  top_k: 5
+  filter: 'document_type == "label" and rxnorm_rxcui == "114194"'
+  expected:
+    document_type: label
+    event_type: label_update
+    normalized_drug_name: warfarin sodium
+    any_section:
+      - warnings
+      - contraindications
+      - boxed_warning
+
+- id: missing_recall_evidence_policy
+  query: "What escalation policy applies when a required recall notice is missing?"
+  top_k: 5
+  filter: 'document_type == "policy" and section == "escalation_criteria"'
+  expected:
+    document_id: policy-evidence-insufficiency-escalation
+    document_type: policy
+    event_type: recall
+    section: escalation_criteria
+    content_contains:
+      - required recall notice is missing
