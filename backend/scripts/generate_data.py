@@ -35,6 +35,8 @@ def selected_datasets(args: argparse.Namespace) -> list[str]:
         if args.all or getattr(args, name)
     ]
     if args.embeddings:
+        if "chunks" not in selected:
+            selected.append("chunks")
         selected.append("embeddings")
     return selected or list(DATASET_COMMANDS)
 

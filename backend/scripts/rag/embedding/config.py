@@ -16,7 +16,7 @@ DEFAULT_EMBEDDED_CHUNKS_PATH = PROCESSED_DIR / "embedded_chunks.jsonl"
 load_dotenv(ROOT_DIR / ".env")
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM") or os.getenv("EMBEDDING_DIMENSION", "1536"))
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
 
 MILVUS_URI = os.getenv("MILVUS_URI", "http://localhost:19530")

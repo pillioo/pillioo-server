@@ -32,8 +32,10 @@ def main() -> None:
 
     chunks, manifest = build_chunks(args.documents_dir)
     try:
-        write_jsonl(chunks, tmp_output).replace(args.output)
-        write_manifest(manifest, tmp_manifest).replace(args.manifest)
+        write_jsonl(chunks, tmp_output)
+        write_manifest(manifest, tmp_manifest)
+        tmp_output.replace(args.output)
+        tmp_manifest.replace(args.manifest)
     except Exception:
         clean_outputs(tmp_output, tmp_manifest)
         raise

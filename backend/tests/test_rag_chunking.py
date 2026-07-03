@@ -204,5 +204,7 @@ def test_build_chunks_cli_removes_temp_files_on_write_failure(
     with pytest.raises(RuntimeError, match="manifest write failed"):
         build_chunks_main()
 
+    assert not output.exists()
+    assert not manifest.exists()
     assert not output.with_suffix(".jsonl.tmp").exists()
     assert not manifest.with_suffix(".json.tmp").exists()
