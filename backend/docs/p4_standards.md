@@ -60,6 +60,3 @@ All API errors should follow the same structure.
 | APPROVAL_REQUIRED     | Pharmacist approval required |
 | INVALID_VERSION_TAG   | Invalid report version       |
 | INTERNAL_SERVER_ERROR | Internal server error        |
-
-```
-```
