@@ -78,18 +78,38 @@ def test_truncate_logs_non_strict_truncation(capsys: pytest.CaptureFixture[str])
 
 
 class FakeMilvusClient:
-    def __init__(self, dim: int | None, field_names: list[str] | None = None) -> None:
+    def __init__(self, dim: int | None, fields: list[dict[str, object]] | None = None) -> None:
         self.dim = dim
-        self.field_names = field_names
+        self.fields = fields
 
     def describe_collection(self, *, collection_name: str) -> dict[str, object]:
         field: dict[str, object] = {"name": "embedding"}
         if self.dim is not None:
             field["params"] = {"dim": self.dim}
         fields = [field]
-        if self.field_names is not None:
-            fields = [{"name": name} for name in self.field_names]
+        if self.fields is not None:
+            fields = self.fields
         return {"fields": fields}
+
+
+def make_collection_fields(
+    *,
+    event_types_type: str = "ARRAY",
+    event_types_element_type: str = "VARCHAR",
+    ndc_type: str = "ARRAY",
+    ndc_element_type: str = "VARCHAR",
+) -> list[dict[str, object]]:
+    fields = []
+    for name in [MilvusField.EMBEDDING, *OUTPUT_FIELDS]:
+        field: dict[str, object] = {"name": name, "type": "VARCHAR"}
+        if name == MilvusField.EMBEDDING:
+            field = {"name": name, "type": "FLOAT_VECTOR"}
+        elif name == MilvusField.EVENT_TYPES:
+            field = {"name": name, "type": event_types_type, "element_type": event_types_element_type}
+        elif name == MilvusField.NDC:
+            field = {"name": name, "type": ndc_type, "element_type": ndc_element_type}
+        fields.append(field)
+    return fields
 
 
 def test_validate_collection_dimension_accepts_matching_dimension() -> None:
@@ -102,15 +122,27 @@ def test_validate_collection_dimension_rejects_mismatch() -> None:
 
 
 def test_validate_collection_fields_accepts_expected_schema() -> None:
-    field_names = [MilvusField.EMBEDDING, *OUTPUT_FIELDS]
-
-    validate_collection_fields(FakeMilvusClient(None, field_names), collection_name="evidence_chunks")
+    validate_collection_fields(FakeMilvusClient(None, make_collection_fields()), collection_name="evidence_chunks")
 
 
 def test_validate_collection_fields_rejects_old_event_types_schema() -> None:
-    field_names = [MilvusField.EMBEDDING, *OUTPUT_FIELDS]
-    field_names.remove(MilvusField.EVENT_TYPES)
-    field_names.append("event_types_json")
+    fields = make_collection_fields()
+    fields = [field for field in fields if field["name"] != MilvusField.EVENT_TYPES]
+    fields.append({"name": "event_types_json", "type": "JSON"})
 
     with pytest.raises(ValueError, match="missing fields"):
-        validate_collection_fields(FakeMilvusClient(None, field_names), collection_name="evidence_chunks")
+        validate_collection_fields(FakeMilvusClient(None, fields), collection_name="evidence_chunks")
+
+
+def test_validate_collection_fields_rejects_scalar_event_types_field() -> None:
+    fields = make_collection_fields(event_types_type="VARCHAR", event_types_element_type="")
+
+    with pytest.raises(ValueError, match="expected ARRAY\\[VARCHAR\\]"):
+        validate_collection_fields(FakeMilvusClient(None, fields), collection_name="evidence_chunks")
+
+
+def test_validate_collection_fields_rejects_array_with_wrong_element_type() -> None:
+    fields = make_collection_fields(ndc_type="ARRAY", ndc_element_type="INT64")
+
+    with pytest.raises(ValueError, match="expected ARRAY\\[VARCHAR\\]"):
+        validate_collection_fields(FakeMilvusClient(None, fields), collection_name="evidence_chunks")
