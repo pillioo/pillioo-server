@@ -95,6 +95,25 @@ def test_metadata_filter_builder_skips_event_type_clause_when_unknown() -> None:
     assert levels == [FilterCandidate('document_type == "policy"', "document_type")]
 
 
+def test_metadata_filter_builder_escapes_filter_string_literals() -> None:
+    levels = MetadataFilterBuilder().build_filter_levels(
+        RetrievalContext(
+            event_type='recall") or document_type != "recall_notice',
+            recall_number='D-1" or recall_number != "D-1',
+        ),
+        EvidenceTarget("recall_notice", sections=['recall_notice\\urgent"']),
+    )
+    escaped_base = (
+        'document_type == "recall_notice" '
+        'and ARRAY_CONTAINS(event_types, "recall\\") or document_type != \\"recall_notice")'
+    )
+
+    assert levels[0].expr == (
+        f'{escaped_base} and recall_number == "D-1\\" or recall_number != \\"D-1"'
+    )
+    assert levels[1].expr == f'{escaped_base} and section == "recall_notice\\\\urgent\\""'
+
+
 def test_metadata_aware_reranker_promotes_identifier_matches() -> None:
     context = RetrievalContext(event_type="recall", recall_number="D-1", ndc=["123"], lot="LOT-A")
     plan = EvidencePlan(event_type="recall", targets=[EvidenceTarget("recall_notice", sections=["recall_notice"])])
