@@ -1,0 +1,16 @@
+{
+  "recall_number": "D-999-2026",
+  "product_description": "Midazolam HCl 1mg/mL Injection, 10mL vials",
+  "reason_for_recall": "Critical particulate matter contamination and severe supply shortage.",
+  "classification": "class_i", 
+  "recalling_firm": "ABC Pharma Inc.",
+  "product_ndc": "0641-6014-41",
+  "lot_number": "LOT-X99",
+  "recall_initiation_date": "2026-07-01",
+  "voluntary_mandated": "Voluntary: Firm initiated",
+  "distribution_pattern": "Nationwide",
+  
+  "availability_status": "Currently in Shortage",
+  "estimated_resolution_date": "2026-12-31",
+  "boxed_warning": "WARNING: RISK OF RESPIRATORY DEPRESSION AND OXYGEN DESATURATION"
+}

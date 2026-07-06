@@ -28,6 +28,7 @@ class Ticket(BaseModel):
     product_description: Optional[str] = Field(default=None, description="제품 상세 설명")
     openfda_id: Optional[str] = Field(default=None, description="OpenFDA 고유 ID 또는 Source ID")
 
+    source_status: Optional[str] = Field(default=None, description="FDA 원본 상태 (ongoing 등)")
 
 # --- 중복 검사 결과 모델 ---
 class DedupResponse(BaseModel):
