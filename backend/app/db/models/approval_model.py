@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey
+from sqlalchemy import Column, Enum, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.db.base import TimeStampedModel
@@ -18,10 +18,14 @@ class Approval(TimeStampedModel):
     )
 
     status = Column(
-        String,
+        Enum(
+            "approved",
+            "rejected",
+            "revised",
+            name="approval_status"
+        ),
         nullable=False
     )
-    # approved / rejected / revised
 
     comment = Column(
         Text,

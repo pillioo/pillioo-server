@@ -25,21 +25,13 @@ Required fields:
 
 * ticket_id
 * step_name
+* duration_ms
+* timestamp
+
+Optional fields:
+
 * input_json
 * output_json
-* duration_ms
-* created_at
-
-Examples of step_name:
-
-* classify_event
-* retrieve_evidence
-* generate_draft
-* safety_check
-* identity_review
-* evidence_review
-* action_review
-* final_approval
 
 ---
 
