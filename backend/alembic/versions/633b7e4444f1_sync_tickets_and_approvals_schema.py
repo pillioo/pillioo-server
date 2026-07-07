@@ -20,23 +20,20 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # PostgreSQL enum creation must be explicit before altering the existing column.
-    approval_status = sa.Enum('approved', 'rejected', 'revised', name='approval_status')
+    approval_status = sa.Enum('pending', 'approved', 'rejected', 'revised', name='approval_status')
     approval_status.create(op.get_bind(), checkfirst=True)
     op.alter_column('approvals', 'status',
                existing_type=sa.VARCHAR(),
                type_=approval_status,
                existing_nullable=False,
                postgresql_using='status::approval_status')
-    op.drop_index(op.f('ix_approvals_ticket_id'), table_name='approvals')
-    op.drop_index(op.f('ix_audit_logs_ticket_id'), table_name='audit_logs')
-    op.drop_index(op.f('ix_report_versions_ticket_id'), table_name='report_versions')
-    op.add_column('tickets', sa.Column('ticket_id', sa.String(), nullable=False))
-    op.add_column('tickets', sa.Column('status', sa.String(), nullable=False))
-    op.add_column('tickets', sa.Column('workflow_stage', sa.String(), nullable=False))
+    op.add_column('tickets', sa.Column('ticket_id', sa.String(), nullable=True))
+    op.add_column('tickets', sa.Column('status', sa.String(), nullable=True))
+    op.add_column('tickets', sa.Column('workflow_stage', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('priority', sa.String(), nullable=True))
-    op.add_column('tickets', sa.Column('event_type', sa.String(), nullable=False))
-    op.add_column('tickets', sa.Column('drug_name', sa.String(), nullable=False))
-    op.add_column('tickets', sa.Column('ndc', sa.String(), nullable=False))
+    op.add_column('tickets', sa.Column('event_type', sa.String(), nullable=True))
+    op.add_column('tickets', sa.Column('drug_name', sa.String(), nullable=True))
+    op.add_column('tickets', sa.Column('ndc', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('lot', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('classification', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('recall_number', sa.String(), nullable=True))
@@ -44,6 +41,24 @@ def upgrade() -> None:
     op.add_column('tickets', sa.Column('product_description', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('openfda_id', sa.String(), nullable=True))
     op.add_column('tickets', sa.Column('source_status', sa.String(), nullable=True))
+    op.execute(
+        """
+        UPDATE tickets
+        SET
+            ticket_id = COALESCE(ticket_id, 'legacy-' || id::text),
+            status = COALESCE(status, 'CREATED'),
+            workflow_stage = COALESCE(workflow_stage, 'PENDING_INVENTORY'),
+            event_type = COALESCE(event_type, 'unknown'),
+            drug_name = COALESCE(drug_name, NULLIF(title, ''), 'unknown'),
+            ndc = COALESCE(ndc, 'unknown')
+        """
+    )
+    op.alter_column('tickets', 'ticket_id', existing_type=sa.String(), nullable=False)
+    op.alter_column('tickets', 'status', existing_type=sa.String(), nullable=False)
+    op.alter_column('tickets', 'workflow_stage', existing_type=sa.String(), nullable=False)
+    op.alter_column('tickets', 'event_type', existing_type=sa.String(), nullable=False)
+    op.alter_column('tickets', 'drug_name', existing_type=sa.String(), nullable=False)
+    op.alter_column('tickets', 'ndc', existing_type=sa.String(), nullable=False)
     op.create_index(op.f('ix_tickets_ndc'), 'tickets', ['ndc'], unique=False)
     op.create_index(op.f('ix_tickets_openfda_id'), 'tickets', ['openfda_id'], unique=True)
     op.create_index(op.f('ix_tickets_ticket_id'), 'tickets', ['ticket_id'], unique=True)
@@ -54,7 +69,16 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.add_column('tickets', sa.Column('description', sa.VARCHAR(), autoincrement=False, nullable=True))
-    op.add_column('tickets', sa.Column('title', sa.VARCHAR(), autoincrement=False, nullable=False))
+    op.add_column('tickets', sa.Column('title', sa.VARCHAR(), autoincrement=False, nullable=True))
+    op.execute(
+        """
+        UPDATE tickets
+        SET
+            title = COALESCE(title, NULLIF(drug_name, ''), ticket_id, 'legacy ticket'),
+            description = COALESCE(description, product_description)
+        """
+    )
+    op.alter_column('tickets', 'title', existing_type=sa.String(), nullable=False)
     op.drop_index(op.f('ix_tickets_ticket_id'), table_name='tickets')
     op.drop_index(op.f('ix_tickets_openfda_id'), table_name='tickets')
     op.drop_index(op.f('ix_tickets_ndc'), table_name='tickets')
@@ -72,10 +96,7 @@ def downgrade() -> None:
     op.drop_column('tickets', 'workflow_stage')
     op.drop_column('tickets', 'status')
     op.drop_column('tickets', 'ticket_id')
-    op.create_index(op.f('ix_report_versions_ticket_id'), 'report_versions', ['ticket_id'], unique=False)
-    op.create_index(op.f('ix_audit_logs_ticket_id'), 'audit_logs', ['ticket_id'], unique=False)
-    op.create_index(op.f('ix_approvals_ticket_id'), 'approvals', ['ticket_id'], unique=False)
-    approval_status = sa.Enum('approved', 'rejected', 'revised', name='approval_status')
+    approval_status = sa.Enum('pending', 'approved', 'rejected', 'revised', name='approval_status')
     op.alter_column('approvals', 'status',
                existing_type=approval_status,
                type_=sa.VARCHAR(),

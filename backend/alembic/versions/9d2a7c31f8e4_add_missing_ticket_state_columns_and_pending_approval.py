@@ -1,4 +1,4 @@
-"""add missing ticket state columns and pending approval status
+"""add missing ticket state columns
 
 Revision ID: 9d2a7c31f8e4
 Revises: 7ab55ceb5b91
@@ -20,7 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.execute("ALTER TYPE approval_status ADD VALUE IF NOT EXISTS 'pending'")
     op.add_column(
         "tickets",
         sa.Column("impact_summary", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
@@ -35,15 +34,3 @@ def downgrade() -> None:
     """Downgrade schema."""
     op.drop_column("tickets", "policy_decision")
     op.drop_column("tickets", "impact_summary")
-
-    # PostgreSQL cannot drop a single enum value in place.
-    op.execute("ALTER TYPE approval_status RENAME TO approval_status_old")
-    op.execute("CREATE TYPE approval_status AS ENUM ('approved', 'rejected', 'revised')")
-    op.execute(
-        """
-        ALTER TABLE approvals
-        ALTER COLUMN status TYPE approval_status
-        USING status::text::approval_status
-        """
-    )
-    op.execute("DROP TYPE approval_status_old")
