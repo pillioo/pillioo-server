@@ -2,15 +2,14 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
-# 프로젝트 루트 추가
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from app.core.config import settings
-from app.db.base import Base
+import app.db.models as db_models
 
 config = context.config
 
@@ -22,7 +21,7 @@ config.set_main_option(
     settings.DATABASE_URL,
 )
 
-target_metadata = Base.metadata
+target_metadata = db_models.Ticket.metadata
 
 
 def run_migrations_offline() -> None:
