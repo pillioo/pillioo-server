@@ -17,10 +17,10 @@ from app.schemas.common import ReportVersionTag
 
 def save_report_version(
     db: Session,
-    ticket_id: str,
+    ticket_id: int,
     version_tag: ReportVersionTag,
     content: str,
-    created_by: str,
+    created_by: str | None = None,
 ) -> ReportVersionModel:
     """
     보고서 버전을 report_versions 테이블에 저장.
@@ -48,8 +48,7 @@ def save_report_version(
     version = ReportVersionModel(
         ticket_id=ticket_id,
         version_tag=version_tag.value,
-        content=content,
-        created_by=created_by,
+        report_text=content,
     )
     db.add(version)
     db.flush() 
@@ -57,7 +56,7 @@ def save_report_version(
     return version
 
 
-def get_report_versions(db: Session, ticket_id: str) -> list[ReportVersionModel]:
+def get_report_versions(db: Session, ticket_id: int) -> list[ReportVersionModel]:
     """
     특정 티켓의 모든 보고서 버전 목록 조회.
 
@@ -78,7 +77,7 @@ def get_report_versions(db: Session, ticket_id: str) -> list[ReportVersionModel]
     )
 
 
-def get_latest_report(db: Session, ticket_id: str) -> ReportVersionModel | None:
+def get_latest_report(db: Session, ticket_id: int) -> ReportVersionModel | None:
     """
     특정 티켓의 가장 최신 보고서 버전 조회.
 
