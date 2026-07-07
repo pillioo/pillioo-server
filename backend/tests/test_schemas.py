@@ -173,6 +173,20 @@ class TestEventNormalized:
         evt = make_event_normalized()
         assert evt.drug_name == "aspirin"  # normalized to lowercase
 
+    def test_provided_recall_number_is_not_fallback(self):
+        evt = make_event_normalized(recall_number="D-001-2026")
+        assert evt.recall_number == "D-001-2026"
+        assert evt.recall_number_is_fallback is False
+
+    def test_missing_recall_number_falls_back_to_event_id(self):
+        evt = make_event_normalized()
+        assert evt.recall_number == "EVT-001"
+        assert evt.recall_number_is_fallback is True
+
+    def test_missing_product_description_remains_none(self):
+        evt = make_event_normalized()
+        assert evt.product_description is None
+
     def test_ndc_normalized(self):
         evt = make_event_normalized(ndc="12345678901")
         assert evt.ndc == "12345678901"

@@ -22,14 +22,17 @@ class EventNormalized(BaseModel):
     status: str = Field(..., description="Source FDA status, such as ongoing or terminated.")
     recall_initiation_date: Optional[date] = None
 
-    # --- RAG/evidence retrieval 및 ticket handoff을 위해 원본 필드 보존 ---
-    # recall_number은 값 자체는 event_id와 동일하지만 의미가 다르다:
-    # event_id는 "내부 스키마에서 이 이벤트를 식별하는 필드"이고,
-    # recall_number은 "FDA 도메인 용어로 참조할 때 쓰는 필드"이다.
-    # 다운스트림(ticket, RAG)이 내부 구현 디테일(event_id)에 의존하지 않고
-    # 도메인 이름으로 접근할 수 있게 하기 위해 중복이어도 별도 필드로 유지한다.
-    recall_number: str = Field(description="Raw FDA recall number (same value as event_id).")
-    product_description: str = Field(description="Original, unnormalized product description text.")
+    # recall_number is the FDA-domain identifier used for recall notice lookup.
+    # If the source does not provide it, event_id is used explicitly and tracked.
+    recall_number: str = Field(description="Raw FDA recall number used for FDA recall lookup.")
+    recall_number_is_fallback: bool = False
+    product_description: Optional[str] = Field(
+        None,
+        description=(
+            "Source-provided FDA product text. drug_name may be used downstream as a "
+            "separate fallback query term, but this field is not inferred from it."
+        ),
+    )
     reason_for_recall: Optional[str] = Field(None, description="FDA-provided reason for recall.")
 
     @model_validator(mode="before")
@@ -39,8 +42,11 @@ class EventNormalized(BaseModel):
             return data
 
         values = dict(data)
-        values.setdefault("recall_number", values.get("event_id"))
-        values.setdefault("product_description", values.get("drug_name"))
+        if values.get("recall_number") is None:
+            values["recall_number"] = values.get("event_id")
+            values["recall_number_is_fallback"] = True
+        else:
+            values.setdefault("recall_number_is_fallback", False)
         return values
 
     @field_validator("ndc")
