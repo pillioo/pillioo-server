@@ -51,10 +51,12 @@ def _load_protected_compounds() -> set[str]:
     파일이 없으면 빈 set 반환.
     """
     if not _PROTECTED_PATH.exists():
-        return set()
+        raise FileNotFoundError(
+            f"Required protected compounds file not found: {_PROTECTED_PATH}"
+        )
     with open(_PROTECTED_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return set(data.get("protected_compounds", []))
+    return {compound.strip().lower() for compound in data["protected_compounds"]}
 
 
 # 모듈 로드 시 한 번만 읽음
