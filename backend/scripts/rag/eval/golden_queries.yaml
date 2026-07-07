@@ -72,3 +72,43 @@
         - escalation_criteria
       min_evidence_count: 1
       must_have_citations: true
+
+# The four entries above all pin an explicit `filter:`, so RetrievalService's
+# filter_override path handles them end-to-end and the EvidenceRouter/
+# MetadataFilterBuilder fallback logic never runs. The two entries below omit
+# `filter:` so retrieval is driven purely by event_type + identifiers, the way
+# a real workflow call would use it.
+- id: fentanyl_recall_router_coverage
+  query: "Find the reason for the 2024 superpotent fentanyl Class I recall."
+  top_k: 5
+  expected:
+    any_hit:
+      document_type: recall_notice
+      event_type: recall
+      recall_number: D-0277-2024
+      classification: class_i
+      content_contains:
+        - superpotent
+    set:
+      required_document_types:
+        - recall_notice
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true
+
+- id: piperacillin_label_router_coverage
+  query: "What label evidence is available for piperacillin tazobactam?"
+  top_k: 5
+  expected:
+    any_hit:
+      document_type: label
+      event_type: label_update
+      rxnorm_rxcui: "74169"
+    set:
+      required_document_types:
+        - label
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true

@@ -16,6 +16,7 @@ from scripts.rag.embedding.config import (
     EMBEDDING_MODEL,
 )
 from scripts.rag.embedding.io import append_jsonl, clean_output, read_jsonl
+from scripts.rag.embedding.validation import validate_optional_positive_int, validate_positive_int
 
 
 T = TypeVar("T")
@@ -99,6 +100,10 @@ def embed_chunks(
     batch_size: int,
     limit: int | None = None,
 ) -> int:
+    validate_positive_int(embedding_dim, name="embedding_dim")
+    validate_positive_int(batch_size, name="batch_size")
+    validate_optional_positive_int(limit, name="limit")
+
     chunks = read_jsonl(input_path)
     if limit is not None:
         chunks = chunks[:limit]

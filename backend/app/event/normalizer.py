@@ -24,9 +24,9 @@ DOSE_FORMS = [
     "syringe", "syringes", "for",
 ]
 
-# 제거할 염/부가어 목록 (salt forms)
+# 제거할 염/부가어 목록 (salt forms) -> "sodium"은 "sodium chloride" 처럼 약물명 자체가 sodium인 경우엔 제거하면 안 되므로 제외.
 SALT_FORMS = [
-    "hydrochloride", "hcl", "sodium", "sulfate", "bitartrate",
+    "hydrochloride", "hcl", "sulfate", "bitartrate",
     "citrate", "phosphate", "succinate", "tromethamine",
     "gluconate", "acetate", "bromide", "chloride", "nitrate",
 ]
@@ -39,9 +39,13 @@ CLASSIFICATION_MAP = {
 }
 
 
-def normalize_drug_name(raw_name: str) -> str:
+def sanitize_drug_name(raw_name: str) -> str:
     """
     약물명에서 용량, 제형, 염 형태를 제거하고 generic name만 추출.
+
+    (참고: EventNormalized.normalize_drug_name field_validator와 이름이
+    겹치지 않도록 sanitize_drug_name으로 명명함. 이 함수는 raw description
+    문자열 전처리 담당, validator는 이미 만들어진 값에 대한 최종 검증 담당.)
 
     예시:
         "MIDAZOLAM HCl 1mg/mL Injection, 10mL vials" → "midazolam"
@@ -177,6 +181,7 @@ def normalize_event(raw: dict) -> EventNormalized:
             "product_ndc": "0641-6014-41",
             "lot_number": "LOT-A1",
             "recall_initiation_date": "2026-01-10",
+            "reason_for_recall": "Subpotent drug",
             "status": "ongoing"
         }
 
@@ -189,10 +194,13 @@ def normalize_event(raw: dict) -> EventNormalized:
             lot="LOT-A1",
             classification=Classification.CLASS_I,
             status="ongoing",
-            recall_initiation_date=date(2026, 1, 10)
+            recall_initiation_date=date(2026, 1, 10),
+            recall_number="D-001-2026",
+            product_description="Midazolam HCl 1mg/mL Injection, 10mL vials",
+            reason_for_recall="Subpotent drug"
         )
     """
-    drug_name = normalize_drug_name(raw["product_description"])
+    drug_name = sanitize_drug_name(raw["product_description"])
     ndc = normalize_ndc(raw["product_ndc"])
     classification = normalize_classification(raw.get("classification"))
 

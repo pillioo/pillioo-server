@@ -31,12 +31,16 @@ def create_ticket(event_data: EventNormalized) -> Ticket:
         workflow_stage="PENDING_INVENTORY", 
         
         created_at=created_at,
-        
-        # event_data에 필드가 없을 경우를 안전하게 대비한다.
-        recall_number=getattr(event_data, "recall_number", None),
-        reason_for_recall=getattr(event_data, "reason_for_recall", None),
-        product_description=getattr(event_data, "product_description", None),
-        openfda_id=getattr(event_data, "event_id", None)  # 원본 event_id를 소스 ID로 활용
+
+        # diff_detector가 이후 FDA 상태 변화를 비교할 수 있도록 기록.
+        source_status=event_data.status,
+
+        # EventNormalized가 이제 이 필드들을 required/optional로 보장하므로
+        # getattr fallback 없이 직접 접근한다.
+        recall_number=event_data.recall_number,
+        reason_for_recall=event_data.reason_for_recall,
+        product_description=event_data.product_description,
+        openfda_id=event_data.event_id,  # 원본 event_id를 소스 ID로 활용
     )
 
     # 4. 임시 DB에 저장
@@ -58,7 +62,10 @@ if __name__ == "__main__":
         lot="LOT-A",
         classification=Classification.CLASS_I,
         status="ongoing",
-        recall_initiation_date=date(2026, 6, 1)
+        recall_initiation_date=date(2026, 6, 1),
+        recall_number="FDA-2026-001",
+        product_description="Midazolam HCl 1mg/mL Injection, 10mL vials",
+        reason_for_recall="Subpotent drug",
     )
     
     print("=== 티켓 생성 테스트 (RAG 연동 데이터 포함) ===")

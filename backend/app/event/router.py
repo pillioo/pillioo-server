@@ -1,14 +1,9 @@
-"""
-P1 - Event Router
-
-FastAPI router for event intake endpoints.
-Handles recall event upload and triggers normalization + ticket creation.
-"""
-
 from fastapi import APIRouter, HTTPException
 
-from app.event.normalizer import normalize_event
 from app.schemas.io import EventUploadRequest, EventUploadResponse
+from app.event.normalizer import normalize_event
+from app.event.ticket_creator import create_ticket
+from app.event.dedup import check_and_save_event, release_event
 
 from app.event.dedup import check_and_save_event
 from app.event.ticket_creator import create_ticket
@@ -19,53 +14,44 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 @router.post("/upload", response_model=EventUploadResponse)
 async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
-    """
-    샘플 recall 이벤트 JSON을 받아서 정규화 후 티켓 생성.
-
-    Args:
-        payload: FDA recall JSON 형식의 요청 바디
-
-    Returns:
-        EventUploadResponse: 정규화된 event_id, status, ticket_id
-
-    예시 요청:
-        POST /events/upload
-        {
-            "recall_number": "D-001-2026",
-            "product_description": "Midazolam HCl 1mg/mL Injection, 10mL vials",
-            "reason_for_recall": "Particulate matter contamination",
-            "classification": "Class I",
-            "product_ndc": "0641-6014-41",
-            "lot_number": "LOT-A1",
-            "recall_initiation_date": "2026-01-10",
-            "status": "ongoing"
-        }
-
-    예시 응답:
-        {
-            "event_id": "D-001-2026",
-            "status": "received",
-            "ticket_id": "T-001"
-        }
-    """
     try:
-        # 1. 정규화 데이터 생성
-        event = normalize_event(payload.model_dump())
+        # 1. 정규화 (mode="json"으로 날짜 ISO 문자열 변환)
+        event = normalize_event(payload.model_dump(mode="json"))
 
-        # 2. [주석 해제] 중복 체크 실행 (수진 - dedup.py 연결 완료)
-        is_dup = check_and_save_event(event.event_id)
-        if is_dup:
-            raise HTTPException(status_code=409, detail=f"이미 수신된 중복 이벤트입니다. (ID: {event.event_id})")
+        # 2. 중복 체크 + 저장 (원자적으로 한 번에)
+        dedup_result = check_and_save_event(event.event_id)
+        if dedup_result.duplicated:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": "DUPLICATE_EVENT",
+                    "message": "Event already processed",
+                    "detail": {"event_id": event.event_id}
+                }
+            )
 
-        # 3. [주석 해제] 티켓 생성 실행 (수진 - ticket_creator.py 연결 완료)
-        ticket_id = create_ticket(event)
+        # 3. 티켓 생성 — 실패 시 rollback
+        try:
+            ticket = create_ticket(event)
+        except Exception as e:
+            release_event(event.event_id)  # 예약 취소
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error_code": "INTERNAL_SERVER_ERROR",
+                    "message": "Failed to create ticket"
+                }
+            ) from e
 
+        # 4. duplicated: False 명시
         return EventUploadResponse(
             event_id=event.event_id,
-            status="received",
-            ticket_id=ticket_id,
+            ticket_id=ticket.ticket_id,
+            duplicated=False,
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

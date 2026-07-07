@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.audit.logger import get_audit_trace
-from app.db.models.approval import Approval
+from app.db.models.approval_model import Approval
 from app.db.session import get_db
 from app.report.versioning import get_latest_report, get_report_versions
 from app.review.approval import handle_approve, handle_reject, handle_revise
@@ -94,7 +94,7 @@ async def approve_ticket(
     한 티켓에 final_v1은 하나만 존재 가능.
     """
     # final_v1 중복 방지
-    from app.db.models.report import ReportVersion as ReportVersionModel
+    from app.db.models.report_version_model import ReportVersion as ReportVersionModel
     from app.schemas.common import ReportVersionTag
 
     existing_final = (

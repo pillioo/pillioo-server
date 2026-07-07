@@ -22,6 +22,33 @@ class EventNormalized(BaseModel):
     status: str = Field(..., description="Source FDA status, such as ongoing or terminated.")
     recall_initiation_date: Optional[date] = None
 
+    # recall_number is the FDA-domain identifier used for recall notice lookup.
+    # If the source does not provide it, event_id is used explicitly and tracked.
+    recall_number: str = Field(description="Raw FDA recall number used for FDA recall lookup.")
+    recall_number_is_fallback: bool = False
+    product_description: Optional[str] = Field(
+        None,
+        description=(
+            "Source-provided FDA product text. drug_name may be used downstream as a "
+            "separate fallback query term, but this field is not inferred from it."
+        ),
+    )
+    reason_for_recall: Optional[str] = Field(None, description="FDA-provided reason for recall.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def fill_fda_handoff_fields(cls, data):
+        if not isinstance(data, dict):
+            return data
+
+        values = dict(data)
+        if values.get("recall_number") is None:
+            values["recall_number"] = values.get("event_id")
+            values["recall_number_is_fallback"] = True
+        else:
+            values.setdefault("recall_number_is_fallback", False)
+        return values
+
     @field_validator("ndc")
     @classmethod
     def validate_ndc_format(cls, value: str) -> str:

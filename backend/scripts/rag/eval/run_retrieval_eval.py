@@ -7,45 +7,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from openai import OpenAI
 
+from app.rag.models import RetrievalContext
+from app.rag.service import RetrievalService
 from scripts.rag.embedding.config import (
     EMBEDDING_MODEL,
     MILVUS_COLLECTION,
     MILVUS_URI,
 )
 
-try:
-    from pymilvus import MilvusClient
-except ImportError as exc:  # pragma: no cover
-    raise ImportError("pymilvus is required to run retrieval evaluation.") from exc
-
 
 DEFAULT_GOLDEN_QUERIES_PATH = Path(__file__).with_name("golden_queries.yaml")
-
-OUTPUT_FIELDS = [
-    "chunk_id",
-    "content",
-    "document_id",
-    "document_type",
-    "event_type",
-    "event_types_json",
-    "section",
-    "section_title",
-    "title",
-    "source_path",
-    "drug_name",
-    "normalized_drug_name",
-    "rxnorm_rxcui",
-    "classification",
-    "ndc",
-    "lot",
-    "recall_number",
-    "metadata_json",
-    "embedding_model",
-    "content_hash",
-]
-
 
 @dataclass(frozen=True)
 class GoldenQuery:
@@ -103,46 +75,6 @@ def load_golden_queries(path: Path) -> list[GoldenQuery]:
             )
         )
     return queries
-
-
-def embed_query(client: OpenAI, query: str, model: str) -> list[float]:
-    response = client.embeddings.create(model=model, input=query)
-    return response.data[0].embedding
-
-
-def normalize_search_hit(hit: dict[str, Any]) -> dict[str, Any]:
-    entity = hit.get("entity") or hit
-    normalized = dict(entity)
-    normalized["score"] = hit.get("distance", hit.get("score"))
-    normalized["id"] = hit.get("id", entity.get("chunk_id"))
-    return normalized
-
-
-def search_milvus(
-    client: MilvusClient,
-    *,
-    collection_name: str,
-    query_embedding: list[float],
-    top_k: int,
-    filter_expr: str,
-    nprobe: int,
-    dedupe_field: str,
-    oversample: int,
-) -> list[dict[str, Any]]:
-    search_limit = top_k if not dedupe_field else max(top_k, top_k * max(1, oversample))
-    result = client.search(
-        collection_name=collection_name,
-        data=[query_embedding],
-        filter=filter_expr,
-        limit=search_limit,
-        output_fields=OUTPUT_FIELDS,
-        search_params={"metric_type": "COSINE", "params": {"nprobe": nprobe}},
-        anns_field="embedding",
-    )
-    hits = [normalize_search_hit(hit) for hit in result[0]]
-    if dedupe_field:
-        hits = dedupe_hits(hits, dedupe_field)
-    return hits[:top_k]
 
 
 def dedupe_hits(hits: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
@@ -305,6 +237,17 @@ def compact_hit(hit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def context_from_expected(expected: dict[str, Any]) -> RetrievalContext:
+    any_hit, _ = split_expected(expected)
+    return RetrievalContext(
+        event_type=any_hit.get("event_type"),
+        normalized_drug_name=any_hit.get("normalized_drug_name"),
+        rxnorm_rxcui=any_hit.get("rxnorm_rxcui"),
+        recall_number=any_hit.get("recall_number"),
+        classification=any_hit.get("classification"),
+    )
+
+
 def run_queries(
     queries: list[GoldenQuery],
     *,
@@ -315,22 +258,25 @@ def run_queries(
     dedupe_field: str,
     oversample: int,
 ) -> list[dict[str, Any]]:
-    openai_client = OpenAI()
-    milvus_client = MilvusClient(uri=uri)
+    retrieval_service = RetrievalService.from_milvus(
+        uri=uri,
+        collection_name=collection_name,
+        embedding_model=model,
+        nprobe=nprobe,
+        oversample=oversample,
+    )
 
     results: list[dict[str, Any]] = []
     for golden in queries:
-        query_embedding = embed_query(openai_client, golden.query, model)
-        hits = search_milvus(
-            milvus_client,
-            collection_name=collection_name,
-            query_embedding=query_embedding,
+        evidence_result = retrieval_service.retrieve(
+            query=golden.query,
+            context=context_from_expected(golden.expected),
             top_k=golden.top_k,
-            filter_expr=golden.filter,
-            nprobe=nprobe,
-            dedupe_field=dedupe_field,
-            oversample=oversample,
+            filter_override=golden.filter or None,
         )
+        hits = [chunk.to_dict() for chunk in evidence_result.chunks]
+        if dedupe_field:
+            hits = dedupe_hits(hits, dedupe_field)[: golden.top_k]
         evaluation = evaluate_empty_hits(hits, golden.expected)
         results.append(
             {
@@ -339,6 +285,13 @@ def run_queries(
                 "filter": golden.filter,
                 "expected": golden.expected,
                 "evaluation": evaluation,
+                "sufficiency": {
+                    "evidence_status": evidence_result.sufficiency.evidence_status,
+                    "coverage_score": evidence_result.sufficiency.coverage_score,
+                    "missing_document_types": evidence_result.sufficiency.missing_document_types,
+                    "weak_document_types": evidence_result.sufficiency.weak_document_types,
+                    "citations_ready": evidence_result.sufficiency.citations_ready,
+                },
                 "hits": [compact_hit(hit) for hit in hits],
             }
         )

@@ -41,27 +41,30 @@ class SufficiencyCheckResult(BaseModel):
     required_sources: list[DocumentType]
     found_sources: list[DocumentType]
     missing_sources: list[DocumentType]
+    # Sources that were found but only via a loose, non-section-specific match —
+    # present, but not confidently relevant. Still counts as a gap for status purposes.
+    weak_sources: list[DocumentType] = Field(default_factory=list)
     coverage_score: float = Field(..., ge=0.0, le=1.0)
     evidence_status: EvidenceStatus
     needs_evidence_review: bool
 
     @model_validator(mode="after")
     def check_status_matches_missing(self) -> "SufficiencyCheckResult":
-        has_missing = len(self.missing_sources) > 0
+        has_gap = bool(self.missing_sources) or bool(self.weak_sources)
 
-        if has_missing and self.evidence_status != EvidenceStatus.INSUFFICIENT:
+        if has_gap and self.evidence_status != EvidenceStatus.INSUFFICIENT:
             raise ValueError(
-                "evidence_status must be insufficient when missing_sources is not empty."
+                "evidence_status must be insufficient when missing_sources or weak_sources is not empty."
             )
 
-        if not has_missing and self.evidence_status != EvidenceStatus.SUFFICIENT:
+        if not has_gap and self.evidence_status != EvidenceStatus.SUFFICIENT:
             raise ValueError(
-                "evidence_status must be sufficient when missing_sources is empty."
+                "evidence_status must be sufficient when missing_sources and weak_sources are empty."
             )
 
-        if has_missing != self.needs_evidence_review:
+        if has_gap != self.needs_evidence_review:
             raise ValueError(
-                "needs_evidence_review must match whether missing_sources is non-empty."
+                "needs_evidence_review must match whether missing_sources or weak_sources is non-empty."
             )
 
         return self

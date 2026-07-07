@@ -1,0 +1,351 @@
+﻿inventory_id,drug_name,brand_name,ndc,lot,quantity,department,days_remaining
+INV-001,midazolam,Versed,00641601441,LOT-A,22,ICU,5
+INV-002,midazolam,Versed,00641601441,LOT-A,21,ER,2
+INV-003,midazolam hcl,Versed,00409222510,LOT-B,15,OR,7
+INV-004,versed injection,Versed,00004199401,LOT-C,10,GW,10
+INV-005,bupivacaine hydrochloride,Marcaine,36062992863,LOT-D,85,ICU,6
+INV-006,methylprednisolone,Solu-Medrol,86622801984,LOT-E,54,ICU,13
+INV-007,magnesium sulfate,MgSO4,83000459897,LOT-A,37,OR,18
+INV-008,bupivacaine hydrochloride,Marcaine,36062992863,LOT-C,73,GW,25
+INV-009,enoxaparin sodium,Lovenox,59823555468,LOT-B,42,ICU,14
+INV-010,magnesium sulfate,MgSO4,83000459897,LOT-C,97,ICU,29
+INV-011,ondansetron,Zofran,45093208437,LOT-A,27,GW,17
+INV-012,cisplatin,Platinol,28131934873,LOT-E,86,ER,17
+INV-013,dopamine,Intropin,23396251958,LOT-B,52,ICU,25
+INV-014,pantoprazole,Protonix,95909917960,LOT-A,72,GW,30
+INV-015,methylprednisolone,Solu-Medrol,86622801984,LOT-A,67,OR,1
+INV-016,alteplase,Activase,58520682036,LOT-B,35,ER,2
+INV-017,acetaminophen,Tylenol,44718328741,LOT-D,15,ICU,24
+INV-018,hydromorphone,Dilaudid,65302152013,LOT-B,73,GW,25
+INV-019,lidocaine,Xylocaine,38893835985,LOT-B,65,GW,18
+INV-020,ceftriaxone,Rocephin,59615229180,LOT-E,82,OR,1
+INV-021,dopamine,Intropin,23396251958,LOT-C,44,GW,13
+INV-022,potassium chloride,KCl,59735542291,LOT-B,62,OR,4
+INV-023,naloxone,Narcan,89131533315,LOT-E,48,ICU,1
+INV-024,ketorolac,Toradol,94259851728,LOT-A,80,ER,8
+INV-025,hydromorphone,Dilaudid,65302152013,LOT-B,85,GW,2
+INV-026,hydromorphone,Dilaudid,65302152013,LOT-E,47,ICU,3
+INV-027,vancomycin,Vancocin,70217978525,LOT-B,90,ER,16
+INV-028,pantoprazole,Protonix,95909917960,LOT-E,97,ICU,30
+INV-029,acetaminophen,Tylenol,44718328741,LOT-D,36,OR,26
+INV-030,insulin regular human,Humulin R,93227380378,LOT-D,17,ER,4
+INV-031,warfarin sodium,Coumadin,93320697730,LOT-A,57,OR,15
+INV-032,dexmedetomidine,Precedex,76237143481,LOT-C,56,ICU,24
+INV-033,dexmedetomidine,Precedex,76237143481,LOT-E,29,ER,7
+INV-034,potassium chloride,KCl,59735542291,LOT-C,59,ICU,6
+INV-035,magnesium sulfate,MgSO4,83000459897,LOT-E,14,ER,15
+INV-036,dexmedetomidine,Precedex,76237143481,LOT-A,88,ICU,18
+INV-037,ketamine,Ketalar,22280458239,LOT-D,35,GW,6
+INV-038,sodium chloride,Normal Saline,14207616861,LOT-D,32,OR,28
+INV-039,morphine sulfate,MS Contin,81482242485,LOT-D,53,ER,1
+INV-040,ceftriaxone,Rocephin,59615229180,LOT-E,41,OR,3
+INV-041,sodium chloride,Normal Saline,14207616861,LOT-B,29,ICU,10
+INV-042,morphine sulfate,MS Contin,81482242485,LOT-A,99,GW,18
+INV-043,heparin sodium,Heparin,20458481422,LOT-D,11,ICU,19
+INV-044,ondansetron,Zofran,45093208437,LOT-E,25,OR,2
+INV-045,ketamine,Ketalar,22280458239,LOT-A,13,ER,20
+INV-046,vancomycin,Vancocin,70217978525,LOT-E,20,OR,29
+INV-047,vancomycin,Vancocin,70217978525,LOT-E,81,GW,2
+INV-048,ketamine,Ketalar,22280458239,LOT-E,89,OR,19
+INV-049,metoclopramide,Reglan,84341615537,LOT-C,38,OR,7
+INV-050,vancomycin,Vancocin,70217978525,LOT-C,55,ER,5
+INV-051,magnesium sulfate,MgSO4,83000459897,LOT-D,14,OR,1
+INV-052,methotrexate,Rheumatrex,62350693038,LOT-E,17,GW,3
+INV-053,dobutamine,Dobutrex,22676688154,LOT-C,38,OR,5
+INV-054,hydromorphone,Dilaudid,65302152013,LOT-B,52,ER,10
+INV-055,potassium chloride,KCl,59735542291,LOT-E,95,OR,10
+INV-056,metoclopramide,Reglan,84341615537,LOT-E,90,ICU,27
+INV-057,meropenem,Merrem,96673473347,LOT-B,18,GW,29
+INV-058,ceftriaxone,Rocephin,59615229180,LOT-E,18,ICU,24
+INV-059,epinephrine,EpiPen,46463110630,LOT-B,41,ER,20
+INV-060,enoxaparin sodium,Lovenox,59823555468,LOT-E,92,ER,2
+INV-061,sodium chloride,Normal Saline,14207616861,LOT-D,11,ER,3
+INV-062,cefazolin,Ancef,48427692583,LOT-B,5,ICU,11
+INV-063,cisplatin,Platinol,28131934873,LOT-D,25,ER,24
+INV-064,ketorolac,Toradol,94259851728,LOT-A,59,GW,18
+INV-065,bupivacaine hydrochloride,Marcaine,36062992863,LOT-B,93,ICU,29
+INV-066,pantoprazole,Protonix,95909917960,LOT-E,52,ICU,19
+INV-067,epinephrine,EpiPen,46463110630,LOT-C,21,OR,2
+INV-068,alteplase,Activase,58520682036,LOT-B,50,ICU,7
+INV-069,dexmedetomidine,Precedex,76237143481,LOT-D,76,OR,29
+INV-070,methotrexate,Rheumatrex,62350693038,LOT-B,24,GW,30
+INV-071,norepinephrine,Levophed,65392657445,LOT-B,57,ER,1
+INV-072,enoxaparin sodium,Lovenox,59823555468,LOT-B,90,OR,28
+INV-073,cefazolin,Ancef,48427692583,LOT-D,94,ER,4
+INV-074,fentanyl,Sublimaze,28289267996,LOT-D,33,OR,7
+INV-075,warfarin sodium,Coumadin,93320697730,LOT-A,34,ER,8
+INV-076,dopamine,Intropin,23396251958,LOT-A,47,OR,9
+INV-077,cefazolin,Ancef,48427692583,LOT-D,87,OR,17
+INV-078,pantoprazole,Protonix,95909917960,LOT-C,8,OR,4
+INV-079,phenylephrine,Neo-Synephrine,30379452753,LOT-A,38,GW,2
+INV-080,methylprednisolone,Solu-Medrol,86622801984,LOT-D,49,OR,2
+INV-081,methylprednisolone,Solu-Medrol,86622801984,LOT-E,19,OR,13
+INV-082,dopamine,Intropin,23396251958,LOT-D,10,ER,23
+INV-083,midazolam,Versed,00641601441,LOT-B,73,OR,22
+INV-084,alteplase,Activase,58520682036,LOT-C,13,OR,22
+INV-085,methotrexate,Rheumatrex,62350693038,LOT-A,89,OR,28
+INV-086,meropenem,Merrem,96673473347,LOT-D,44,OR,22
+INV-087,heparin sodium,Heparin,20458481422,LOT-E,94,OR,10
+INV-088,lidocaine,Xylocaine,38893835985,LOT-D,58,ER,22
+INV-089,phenylephrine,Neo-Synephrine,30379452753,LOT-D,77,GW,10
+INV-090,ketorolac,Toradol,94259851728,LOT-B,43,ICU,10
+INV-091,insulin glargine,Lantus,42087367769,LOT-C,82,GW,21
+INV-092,magnesium sulfate,MgSO4,83000459897,LOT-B,61,OR,22
+INV-093,ondansetron,Zofran,45093208437,LOT-A,99,OR,6
+INV-094,piperacillin and tazobactam,Zosyn,35203213915,LOT-E,89,OR,21
+INV-095,enoxaparin sodium,Lovenox,59823555468,LOT-C,35,ICU,22
+INV-096,naloxone,Narcan,89131533315,LOT-A,23,ER,1
+INV-097,vancomycin,Vancocin,70217978525,LOT-A,83,OR,28
+INV-098,magnesium sulfate,MgSO4,83000459897,LOT-B,85,OR,19
+INV-099,amiodarone,Cordarone,97841537499,LOT-B,56,OR,8
+INV-100,midazolam,Versed,00641601441,LOT-B,18,GW,2
+INV-101,phenylephrine,Neo-Synephrine,30379452753,LOT-A,71,GW,15
+INV-102,ketorolac,Toradol,94259851728,LOT-B,20,ER,15
+INV-103,magnesium sulfate,MgSO4,83000459897,LOT-E,72,GW,18
+INV-104,heparin sodium,Heparin,20458481422,LOT-E,61,GW,20
+INV-105,insulin glargine,Lantus,42087367769,LOT-B,62,GW,29
+INV-106,dextrose,D5W,52504191639,LOT-B,38,OR,25
+INV-107,cisplatin,Platinol,28131934873,LOT-B,71,ER,16
+INV-108,cefazolin,Ancef,48427692583,LOT-C,14,OR,23
+INV-109,vancomycin,Vancocin,70217978525,LOT-E,47,ER,11
+INV-110,ketamine,Ketalar,22280458239,LOT-D,24,ICU,8
+INV-111,epinephrine,EpiPen,46463110630,LOT-D,32,GW,3
+INV-112,insulin regular human,Humulin R,93227380378,LOT-D,74,OR,15
+INV-113,morphine sulfate,MS Contin,81482242485,LOT-E,58,ER,13
+INV-114,propofol,Diprivan,46048501238,LOT-D,78,GW,13
+INV-115,midazolam,Versed,00641601441,LOT-D,43,OR,25
+INV-116,insulin regular human,Humulin R,93227380378,LOT-E,100,OR,24
+INV-117,methylprednisolone,Solu-Medrol,86622801984,LOT-C,67,ER,8
+INV-118,insulin glargine,Lantus,42087367769,LOT-C,8,OR,13
+INV-119,nitroglycerin,Nitrostat,99593216987,LOT-D,26,GW,27
+INV-120,lidocaine,Xylocaine,38893835985,LOT-E,73,GW,2
+INV-121,acetaminophen,Tylenol,44718328741,LOT-D,8,GW,3
+INV-122,lidocaine,Xylocaine,38893835985,LOT-C,28,OR,2
+INV-123,amiodarone,Cordarone,97841537499,LOT-C,32,OR,15
+INV-124,enoxaparin sodium,Lovenox,59823555468,LOT-D,53,GW,9
+INV-125,ceftriaxone,Rocephin,59615229180,LOT-E,65,ICU,1
+INV-126,morphine sulfate,MS Contin,81482242485,LOT-A,33,OR,21
+INV-127,fentanyl,Sublimaze,28289267996,LOT-B,8,GW,8
+INV-128,propofol,Diprivan,46048501238,LOT-B,24,GW,8
+INV-129,dextrose,D5W,52504191639,LOT-B,19,GW,19
+INV-130,magnesium sulfate,MgSO4,83000459897,LOT-C,37,GW,25
+INV-131,norepinephrine,Levophed,65392657445,LOT-A,82,GW,24
+INV-132,norepinephrine,Levophed,65392657445,LOT-A,18,ER,19
+INV-133,meropenem,Merrem,96673473347,LOT-D,91,GW,30
+INV-134,nitroglycerin,Nitrostat,99593216987,LOT-E,30,GW,3
+INV-135,cisplatin,Platinol,28131934873,LOT-C,18,ER,23
+INV-136,methylprednisolone,Solu-Medrol,86622801984,LOT-A,77,ICU,26
+INV-137,warfarin sodium,Coumadin,93320697730,LOT-C,59,OR,22
+INV-138,hydromorphone,Dilaudid,65302152013,LOT-A,87,OR,11
+INV-139,insulin regular human,Humulin R,93227380378,LOT-C,18,OR,14
+INV-140,cisplatin,Platinol,28131934873,LOT-B,95,OR,2
+INV-141,metoclopramide,Reglan,84341615537,LOT-E,39,GW,20
+INV-142,dextrose,D5W,52504191639,LOT-E,60,OR,27
+INV-143,cefazolin,Ancef,48427692583,LOT-A,36,OR,27
+INV-144,cefazolin,Ancef,48427692583,LOT-D,36,OR,25
+INV-145,acetaminophen,Tylenol,44718328741,LOT-C,90,GW,13
+INV-146,propofol,Diprivan,46048501238,LOT-D,46,OR,6
+INV-147,dobutamine,Dobutrex,22676688154,LOT-C,38,OR,11
+INV-148,methylprednisolone,Solu-Medrol,86622801984,LOT-A,40,GW,18
+INV-149,metoclopramide,Reglan,84341615537,LOT-D,15,ER,8
+INV-150,sodium chloride,Normal Saline,14207616861,LOT-D,35,GW,23
+INV-151,sodium chloride,Normal Saline,14207616861,LOT-C,7,OR,3
+INV-152,naloxone,Narcan,89131533315,LOT-C,93,OR,8
+INV-153,dexamethasone,Decadron,83579983043,LOT-E,65,OR,18
+INV-154,warfarin sodium,Coumadin,93320697730,LOT-C,100,OR,18
+INV-155,warfarin sodium,Coumadin,93320697730,LOT-C,63,GW,9
+INV-156,ceftriaxone,Rocephin,59615229180,LOT-B,20,ER,24
+INV-157,heparin sodium,Heparin,20458481422,LOT-B,100,ICU,18
+INV-158,dopamine,Intropin,23396251958,LOT-C,99,ER,16
+INV-159,dexamethasone,Decadron,83579983043,LOT-C,72,GW,20
+INV-160,dexmedetomidine,Precedex,76237143481,LOT-B,42,ER,2
+INV-161,meropenem,Merrem,96673473347,LOT-B,95,ICU,18
+INV-162,cefazolin,Ancef,48427692583,LOT-C,11,ICU,18
+INV-163,lidocaine,Xylocaine,38893835985,LOT-A,67,GW,4
+INV-164,acetaminophen,Tylenol,44718328741,LOT-D,65,ER,16
+INV-165,enoxaparin sodium,Lovenox,59823555468,LOT-D,11,ER,9
+INV-166,bupivacaine hydrochloride,Marcaine,36062992863,LOT-A,56,ICU,16
+INV-167,acetaminophen,Tylenol,44718328741,LOT-B,92,GW,2
+INV-168,epinephrine,EpiPen,46463110630,LOT-B,43,GW,3
+INV-169,bupivacaine hydrochloride,Marcaine,36062992863,LOT-E,58,GW,20
+INV-170,methotrexate,Rheumatrex,62350693038,LOT-D,71,ER,13
+INV-171,potassium chloride,KCl,59735542291,LOT-C,80,ER,14
+INV-172,acetaminophen,Tylenol,44718328741,LOT-A,12,GW,20
+INV-173,dobutamine,Dobutrex,22676688154,LOT-A,32,GW,9
+INV-174,norepinephrine,Levophed,65392657445,LOT-A,27,ER,18
+INV-175,norepinephrine,Levophed,65392657445,LOT-E,57,ICU,15
+INV-176,dextrose,D5W,52504191639,LOT-C,9,ER,8
+INV-177,piperacillin and tazobactam,Zosyn,35203213915,LOT-B,63,GW,3
+INV-178,ceftriaxone,Rocephin,59615229180,LOT-B,80,GW,22
+INV-179,insulin glargine,Lantus,42087367769,LOT-B,74,ICU,8
+INV-180,cefazolin,Ancef,48427692583,LOT-C,14,ICU,1
+INV-181,methylprednisolone,Solu-Medrol,86622801984,LOT-C,77,GW,30
+INV-182,potassium chloride,KCl,59735542291,LOT-C,64,ICU,23
+INV-183,nitroglycerin,Nitrostat,99593216987,LOT-D,69,ER,18
+INV-184,potassium chloride,KCl,59735542291,LOT-D,81,ICU,2
+INV-185,heparin sodium,Heparin,20458481422,LOT-A,37,GW,1
+INV-186,naloxone,Narcan,89131533315,LOT-A,78,GW,19
+INV-187,cefazolin,Ancef,48427692583,LOT-B,10,GW,25
+INV-188,dextrose,D5W,52504191639,LOT-C,88,OR,15
+INV-189,phenylephrine,Neo-Synephrine,30379452753,LOT-D,60,GW,21
+INV-190,ketamine,Ketalar,22280458239,LOT-C,49,OR,14
+INV-191,heparin sodium,Heparin,20458481422,LOT-B,18,GW,28
+INV-192,enoxaparin sodium,Lovenox,59823555468,LOT-C,93,OR,16
+INV-193,nitroglycerin,Nitrostat,99593216987,LOT-D,75,GW,2
+INV-194,ketamine,Ketalar,22280458239,LOT-A,37,OR,11
+INV-195,nitroglycerin,Nitrostat,99593216987,LOT-E,5,OR,22
+INV-196,magnesium sulfate,MgSO4,83000459897,LOT-E,11,OR,7
+INV-197,alteplase,Activase,58520682036,LOT-D,68,GW,21
+INV-198,morphine sulfate,MS Contin,81482242485,LOT-B,39,ER,18
+INV-199,piperacillin and tazobactam,Zosyn,35203213915,LOT-A,94,OR,16
+INV-200,propofol,Diprivan,46048501238,LOT-B,82,GW,1
+INV-201,meropenem,Merrem,96673473347,LOT-D,6,GW,18
+INV-202,ketamine,Ketalar,22280458239,LOT-A,19,ER,15
+INV-203,epinephrine,EpiPen,46463110630,LOT-E,96,OR,10
+INV-204,cefazolin,Ancef,48427692583,LOT-B,66,OR,16
+INV-205,magnesium sulfate,MgSO4,83000459897,LOT-B,23,GW,13
+INV-206,methylprednisolone,Solu-Medrol,86622801984,LOT-B,100,OR,29
+INV-207,hydromorphone,Dilaudid,65302152013,LOT-E,58,ER,11
+INV-208,cefazolin,Ancef,48427692583,LOT-C,41,ICU,24
+INV-209,dexamethasone,Decadron,83579983043,LOT-B,89,GW,16
+INV-210,potassium chloride,KCl,59735542291,LOT-C,66,OR,12
+INV-211,ketorolac,Toradol,94259851728,LOT-D,74,GW,13
+INV-212,heparin sodium,Heparin,20458481422,LOT-E,94,ER,8
+INV-213,amiodarone,Cordarone,97841537499,LOT-C,57,ER,2
+INV-214,dextrose,D5W,52504191639,LOT-B,53,GW,13
+INV-215,sodium chloride,Normal Saline,14207616861,LOT-E,21,ICU,17
+INV-216,enoxaparin sodium,Lovenox,59823555468,LOT-E,61,ICU,4
+INV-217,magnesium sulfate,MgSO4,83000459897,LOT-D,97,ICU,5
+INV-218,epinephrine,EpiPen,46463110630,LOT-C,65,ICU,26
+INV-219,enoxaparin sodium,Lovenox,59823555468,LOT-A,93,GW,13
+INV-220,enoxaparin sodium,Lovenox,59823555468,LOT-D,73,GW,2
+INV-221,pantoprazole,Protonix,95909917960,LOT-B,84,ICU,3
+INV-222,cisplatin,Platinol,28131934873,LOT-A,41,GW,8
+INV-223,insulin glargine,Lantus,42087367769,LOT-A,86,ICU,23
+INV-224,potassium chloride,KCl,59735542291,LOT-A,93,ER,10
+INV-225,fentanyl,Sublimaze,28289267996,LOT-C,12,OR,10
+INV-226,alteplase,Activase,58520682036,LOT-E,23,OR,8
+INV-227,insulin regular human,Humulin R,93227380378,LOT-B,92,GW,26
+INV-228,norepinephrine,Levophed,65392657445,LOT-D,15,ER,20
+INV-229,methotrexate,Rheumatrex,62350693038,LOT-E,35,GW,16
+INV-230,epinephrine,EpiPen,46463110630,LOT-C,64,ER,21
+INV-231,magnesium sulfate,MgSO4,83000459897,LOT-D,90,ER,1
+INV-232,piperacillin and tazobactam,Zosyn,35203213915,LOT-A,74,GW,6
+INV-233,potassium chloride,KCl,59735542291,LOT-D,80,OR,10
+INV-234,ceftriaxone,Rocephin,59615229180,LOT-D,43,OR,7
+INV-235,dextrose,D5W,52504191639,LOT-E,35,ICU,13
+INV-236,warfarin sodium,Coumadin,93320697730,LOT-C,42,GW,23
+INV-237,propofol,Diprivan,46048501238,LOT-A,55,GW,9
+INV-238,acetaminophen,Tylenol,44718328741,LOT-E,100,GW,2
+INV-239,sodium chloride,Normal Saline,14207616861,LOT-C,34,ER,20
+INV-240,naloxone,Narcan,89131533315,LOT-B,29,GW,2
+INV-241,cisplatin,Platinol,28131934873,LOT-A,85,ICU,21
+INV-242,meropenem,Merrem,96673473347,LOT-C,9,OR,19
+INV-243,lidocaine,Xylocaine,38893835985,LOT-D,42,ICU,11
+INV-244,phenylephrine,Neo-Synephrine,30379452753,LOT-E,21,ER,26
+INV-245,alteplase,Activase,58520682036,LOT-C,69,OR,30
+INV-246,norepinephrine,Levophed,65392657445,LOT-C,66,ER,26
+INV-247,enoxaparin sodium,Lovenox,59823555468,LOT-B,64,ICU,3
+INV-248,naloxone,Narcan,89131533315,LOT-D,97,GW,22
+INV-249,ketorolac,Toradol,94259851728,LOT-D,16,OR,26
+INV-250,midazolam,Versed,00641601441,LOT-D,73,ER,4
+INV-251,alteplase,Activase,58520682036,LOT-C,100,GW,22
+INV-252,dexamethasone,Decadron,83579983043,LOT-A,86,OR,12
+INV-253,naloxone,Narcan,89131533315,LOT-E,8,OR,20
+INV-254,heparin sodium,Heparin,20458481422,LOT-A,33,GW,21
+INV-255,cisplatin,Platinol,28131934873,LOT-D,94,OR,10
+INV-256,bupivacaine hydrochloride,Marcaine,36062992863,LOT-C,10,ICU,2
+INV-257,sodium chloride,Normal Saline,14207616861,LOT-E,17,ICU,8
+INV-258,lidocaine,Xylocaine,38893835985,LOT-E,63,OR,12
+INV-259,insulin regular human,Humulin R,93227380378,LOT-B,100,GW,24
+INV-260,insulin regular human,Humulin R,93227380378,LOT-E,17,GW,2
+INV-261,insulin regular human,Humulin R,93227380378,LOT-C,9,ER,23
+INV-262,dobutamine,Dobutrex,22676688154,LOT-C,61,OR,8
+INV-263,dexmedetomidine,Precedex,76237143481,LOT-C,52,GW,18
+INV-264,morphine sulfate,MS Contin,81482242485,LOT-A,40,OR,7
+INV-265,magnesium sulfate,MgSO4,83000459897,LOT-E,89,ICU,7
+INV-266,propofol,Diprivan,46048501238,LOT-B,47,ICU,8
+INV-267,acetaminophen,Tylenol,44718328741,LOT-E,13,ER,27
+INV-268,dobutamine,Dobutrex,22676688154,LOT-B,32,GW,27
+INV-269,enoxaparin sodium,Lovenox,59823555468,LOT-E,23,GW,26
+INV-270,midazolam,Versed,00641601441,LOT-E,23,ER,5
+INV-271,ceftriaxone,Rocephin,59615229180,LOT-A,19,ER,22
+INV-272,lidocaine,Xylocaine,38893835985,LOT-B,50,ICU,26
+INV-273,dexamethasone,Decadron,83579983043,LOT-C,7,OR,6
+INV-274,morphine sulfate,MS Contin,81482242485,LOT-E,99,ICU,14
+INV-275,bupivacaine hydrochloride,Marcaine,36062992863,LOT-D,13,GW,16
+INV-276,alteplase,Activase,58520682036,LOT-D,80,OR,4
+INV-277,ondansetron,Zofran,45093208437,LOT-E,83,ER,2
+INV-278,meropenem,Merrem,96673473347,LOT-A,87,OR,1
+INV-279,dextrose,D5W,52504191639,LOT-A,59,OR,22
+INV-280,sodium chloride,Normal Saline,14207616861,LOT-C,61,GW,1
+INV-281,methylprednisolone,Solu-Medrol,86622801984,LOT-C,13,ICU,5
+INV-282,methotrexate,Rheumatrex,62350693038,LOT-C,79,GW,18
+INV-283,amiodarone,Cordarone,97841537499,LOT-D,72,GW,10
+INV-284,ondansetron,Zofran,45093208437,LOT-A,60,GW,4
+INV-285,ketorolac,Toradol,94259851728,LOT-D,32,GW,14
+INV-286,naloxone,Narcan,89131533315,LOT-D,48,OR,27
+INV-287,nitroglycerin,Nitrostat,99593216987,LOT-C,98,OR,4
+INV-288,insulin glargine,Lantus,42087367769,LOT-C,90,OR,9
+INV-289,epinephrine,EpiPen,46463110630,LOT-A,65,GW,3
+INV-290,ketamine,Ketalar,22280458239,LOT-C,60,ICU,4
+INV-291,lidocaine,Xylocaine,38893835985,LOT-E,12,GW,19
+INV-292,ketorolac,Toradol,94259851728,LOT-D,90,OR,4
+INV-293,warfarin sodium,Coumadin,93320697730,LOT-A,59,GW,28
+INV-294,piperacillin and tazobactam,Zosyn,35203213915,LOT-A,44,GW,12
+INV-295,acetaminophen,Tylenol,44718328741,LOT-D,32,OR,5
+INV-296,naloxone,Narcan,89131533315,LOT-E,49,ICU,28
+INV-297,alteplase,Activase,58520682036,LOT-B,40,ICU,19
+INV-298,insulin glargine,Lantus,42087367769,LOT-E,84,GW,20
+INV-299,propofol,Diprivan,46048501238,LOT-C,89,GW,27
+INV-300,propofol,Diprivan,46048501238,LOT-C,39,ER,2
+INV-301,warfarin sodium,Coumadin,93320697730,LOT-B,28,ICU,28
+INV-302,acetaminophen,Tylenol,44718328741,LOT-B,56,GW,3
+INV-303,cisplatin,Platinol,28131934873,LOT-E,16,ICU,24
+INV-304,dobutamine,Dobutrex,22676688154,LOT-C,58,OR,15
+INV-305,norepinephrine,Levophed,65392657445,LOT-C,44,OR,24
+INV-306,acetaminophen,Tylenol,44718328741,LOT-A,15,GW,29
+INV-307,epinephrine,EpiPen,46463110630,LOT-A,84,ER,2
+INV-308,cefazolin,Ancef,48427692583,LOT-D,89,OR,14
+INV-309,methylprednisolone,Solu-Medrol,86622801984,LOT-B,58,OR,9
+INV-310,ondansetron,Zofran,45093208437,LOT-A,49,ICU,14
+INV-311,piperacillin and tazobactam,Zosyn,35203213915,LOT-D,91,GW,19
+INV-312,metoclopramide,Reglan,84341615537,LOT-B,44,GW,2
+INV-313,nitroglycerin,Nitrostat,99593216987,LOT-B,12,GW,1
+INV-314,meropenem,Merrem,96673473347,LOT-C,22,ER,25
+INV-315,piperacillin and tazobactam,Zosyn,35203213915,LOT-D,20,OR,1
+INV-316,insulin glargine,Lantus,42087367769,LOT-E,21,ER,13
+INV-317,naloxone,Narcan,89131533315,LOT-C,76,OR,27
+INV-318,hydromorphone,Dilaudid,65302152013,LOT-D,99,OR,2
+INV-319,propofol,Diprivan,46048501238,LOT-C,14,OR,28
+INV-320,acetaminophen,Tylenol,44718328741,LOT-D,78,OR,3
+INV-321,piperacillin and tazobactam,Zosyn,35203213915,LOT-C,56,ICU,1
+INV-322,norepinephrine,Levophed,65392657445,LOT-C,63,GW,27
+INV-323,ketamine,Ketalar,22280458239,LOT-D,18,OR,8
+INV-324,dexamethasone,Decadron,83579983043,LOT-D,72,OR,3
+INV-325,meropenem,Merrem,96673473347,LOT-C,48,GW,8
+INV-326,norepinephrine,Levophed,65392657445,LOT-A,70,ICU,21
+INV-327,metoclopramide,Reglan,84341615537,LOT-C,29,OR,29
+INV-328,warfarin sodium,Coumadin,93320697730,LOT-B,87,GW,27
+INV-329,vancomycin,Vancocin,70217978525,LOT-B,23,ICU,9
+INV-330,phenylephrine,Neo-Synephrine,30379452753,LOT-A,24,GW,25
+INV-331,phenylephrine,Neo-Synephrine,30379452753,LOT-D,85,GW,16
+INV-332,acetaminophen,Tylenol,44718328741,LOT-E,79,GW,15
+INV-333,cisplatin,Platinol,28131934873,LOT-C,46,GW,28
+INV-334,epinephrine,EpiPen,46463110630,LOT-D,13,OR,16
+INV-335,cisplatin,Platinol,28131934873,LOT-A,40,ER,19
+INV-336,warfarin sodium,Coumadin,93320697730,LOT-D,14,OR,10
+INV-337,potassium chloride,KCl,59735542291,LOT-C,12,ICU,12
+INV-338,hydromorphone,Dilaudid,65302152013,LOT-E,16,GW,20
+INV-339,ondansetron,Zofran,45093208437,LOT-E,64,OR,19
+INV-340,fentanyl,Sublimaze,28289267996,LOT-C,78,OR,1
+INV-341,methylprednisolone,Solu-Medrol,86622801984,LOT-A,69,OR,5
+INV-342,potassium chloride,KCl,59735542291,LOT-A,48,ICU,23
+INV-343,ondansetron,Zofran,45093208437,LOT-B,27,GW,2
+INV-344,potassium chloride,KCl,59735542291,LOT-E,72,OR,17
+INV-345,norepinephrine,Levophed,65392657445,LOT-C,52,OR,30
+INV-346,amiodarone,Cordarone,97841537499,LOT-E,48,OR,22
+INV-347,morphine sulfate,MS Contin,81482242485,LOT-A,87,GW,11
+INV-348,enoxaparin sodium,Lovenox,59823555468,LOT-D,76,ICU,22
+INV-349,piperacillin and tazobactam,Zosyn,35203213915,LOT-E,97,ER,28
+INV-350,epinephrine,EpiPen,46463110630,LOT-B,15,OR,19
