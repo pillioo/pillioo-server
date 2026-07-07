@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.event.normalizer import normalize_ndc, normalize_event
+from app.event.normalizer import normalize_ndc, normalize_event, sanitize_drug_name
 
 # 샘플 데이터 경로
 SAMPLE_PATH = Path(__file__).parent.parent / "app" / "event" / "recall_samples.json"
@@ -165,3 +166,34 @@ class TestNdcNormalizationIntegration:
             assert event.drug_name.strip(), (
                 f"[{sample['recall_number']}] drug_name is empty after normalization"
             )
+
+# ──────────────────────────────────────────────
+# regression test - RxNorm helper를 바로 재사용하지 않더라도, 최소한 의도한 출력은 regression test로 고정
+# ──────────────────────────────────────────────
+
+class TestSanitizeDrugName:
+
+    def test_combination_drug_and(self):
+        assert sanitize_drug_name(
+            "Piperacillin and Tazobactam 4.5g powder for injection"
+        ) == "piperacillin / tazobactam"
+
+    def test_combination_drug_sodium_salt(self):
+        assert sanitize_drug_name(
+            "Piperacillin Sodium and Tazobactam Sodium 4.5g powder for injection"
+        ) == "piperacillin / tazobactam"
+
+    def test_protected_sodium_chloride(self):
+        assert sanitize_drug_name(
+            "Sodium Chloride 0.9% Injection"
+        ) == "sodium chloride"
+
+    def test_protected_heparin_sodium(self):
+        assert sanitize_drug_name(
+            "Heparin Sodium 5000 USP units/mL Injection"
+        ) == "heparin sodium"
+
+    def test_salt_stripped_morphine(self):
+        assert sanitize_drug_name(
+            "Morphine Sulfate 10mg/mL Injection"
+        ) == "morphine"
