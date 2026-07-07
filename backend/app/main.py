@@ -7,6 +7,7 @@ from datetime import datetime
 
 # 중앙 라우터 임포트
 from app.api.router import router as api_router
+
 # openFDA 주기적 수집 파이프라인 함수 임포트
 # from app.event.collector import periodic_collect
 
@@ -14,7 +15,7 @@ from app.api.router import router as api_router
 # FastAPI 앱의 시작과 종료 시동을 관리하는 수명주기(lifespan) 정의
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("⏳ openFDA 자동 수집 스케줄러 가동 준비...")
+    # print("⏳ openFDA 자동 수집 스케줄러 가동 준비...")
     # scheduler = AsyncIOScheduler()
     
     # 테스트용: 10초마다 openFDA 데이터 수집 실행
@@ -23,12 +24,13 @@ async def lifespan(app: FastAPI):
     # scheduler.start()
     # print("✅ 스케줄러 가동 완료! (10초 주기로 백그라운드 수집을 시작합니다)")
     
-    yield  # --- 이 위치에서 FastAPI 서버가 구동되어 손님을 받습니다! ---
-    
     # 서버 종료 시 스케줄러도 안전하게 셧다운
-    print("🛑 스케줄러 종료 중...")
+    # print("🛑 스케줄러 종료 중...")
     # scheduler.shutdown()
 
+    # openFDA 수집은 현재 /events/collect 수동 트리거로만 실행됩니다.
+    yield
+    
 
 # lifespan 매니저를 탑재하여 FastAPI 앱 초기화
 app = FastAPI(title="P5 Platform MVP", version="0.1.0", lifespan=lifespan)

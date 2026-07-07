@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from app.event.normalizer import normalize_event
 from app.schemas.io import EventUploadRequest, EventUploadResponse
 
-from app.event.dedup import check_duplicate
+from app.event.dedup import check_and_save_event
 from app.event.ticket_creator import create_ticket
 from app.event.collector import periodic_collect
 
@@ -53,7 +53,7 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
         event = normalize_event(payload.model_dump())
 
         # 2. [주석 해제] 중복 체크 실행 (수진 - dedup.py 연결 완료)
-        is_dup = check_duplicate(event.event_id)
+        is_dup = check_and_save_event(event.event_id)
         if is_dup:
             raise HTTPException(status_code=409, detail=f"이미 수신된 중복 이벤트입니다. (ID: {event.event_id})")
 
@@ -93,7 +93,7 @@ async def trigger_openfda_collection():
         try:
             event = normalize_event(raw_event)
             # 중복되지 않은 신규 데이터인 경우에만 티켓 발행
-            if not check_duplicate(event.event_id):
+            if not check_and_save_event(event.event_id):
                 create_ticket(event)
                 processed_summary["recalls"]["tickets_created"] += 1
         except Exception:
