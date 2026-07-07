@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.db.base import TimeStampedModel
@@ -28,6 +29,18 @@ class Ticket(TimeStampedModel):
     # 4. 중복 및 상태 변경 감지(Diff Detector)용 핵심 데이터
     openfda_id = Column(String, unique=True, index=True, nullable=True)
     source_status = Column(String, nullable=True)
+
+    # 5. Orchestrator가 채워나가는 워크플로우 단계별 결과 (TicketState 영속화)
+    inventory_result = Column(JSONB, nullable=True)
+    impact_summary = Column(JSONB, nullable=True)
+    evidence_result = Column(JSONB, nullable=True)
+    sufficiency_check = Column(JSONB, nullable=True)
+    draft_text = Column(Text, nullable=True)
+    draft_citations = Column(JSONB, nullable=True)
+    safety_result = Column(JSONB, nullable=True)
+    trust_checks = Column(JSONB, nullable=True)
+    policy_decision = Column(JSONB, nullable=True)
+    review_type = Column(String, nullable=True)
 
     # P4 Relationships
     approvals = relationship(

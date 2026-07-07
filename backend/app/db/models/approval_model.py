@@ -19,6 +19,7 @@ class Approval(TimeStampedModel):
 
     status = Column(
         Enum(
+            "pending",
             "approved",
             "rejected",
             "revised",
