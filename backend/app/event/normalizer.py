@@ -7,8 +7,10 @@ Converts raw FDA recall JSON into EventNormalized schema.
 - Maps classification string to Classification enum
 """
 
+import json
 import re
 from datetime import date
+from pathlib import Path
 
 from app.schemas.common import Classification, EventType
 from app.schemas.event import EventNormalized
@@ -24,9 +26,10 @@ DOSE_FORMS = [
     "syringe", "syringes", "for",
 ]
 
-# 제거할 염/부가어 목록 (salt forms) -> "sodium"은 "sodium chloride" 처럼 약물명 자체가 sodium인 경우엔 제거하면 안 되므로 제외.
+# 제거할 염/부가어 목록 (salt forms)
+# sodium, chloride 원복 — protected_compounds.json으로 예외 처리
 SALT_FORMS = [
-    "hydrochloride", "hcl", "sulfate", "bitartrate",
+    "hydrochloride", "hcl", "sodium", "sulfate", "bitartrate",
     "citrate", "phosphate", "succinate", "tromethamine",
     "gluconate", "acetate", "bromide", "chloride", "nitrate",
 ]
@@ -38,47 +41,93 @@ CLASSIFICATION_MAP = {
     "class iii": Classification.CLASS_III,
 }
 
+# protected_compounds.json 경로
+_PROTECTED_PATH = Path(__file__).parent / "protected_compounds.json"
+
+
+def _load_protected_compounds() -> set[str]:
+    """
+    protected_compounds.json에서 예외 화합물 목록을 로드.
+    파일이 없으면 빈 set 반환.
+    """
+    if not _PROTECTED_PATH.exists():
+        return set()
+    with open(_PROTECTED_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return set(data.get("protected_compounds", []))
+
+
+# 모듈 로드 시 한 번만 읽음
+PROTECTED_COMPOUNDS = _load_protected_compounds()
+
+
+def _strip_salt(name: str) -> str:
+    """
+    제형 제거까지 끝난 단일 화합물명에 대해
+    protected 여부 체크 후 salt 제거.
+
+    protected_compounds.json에 있는 화합물은 salt 제거 스킵.
+
+    예시:
+        "heparin sodium"  → "heparin sodium"  (protected)
+        "sodium chloride" → "sodium chloride"  (protected)
+        "morphine sulfate" → "morphine"        (not protected)
+        "midazolam hcl"   → "midazolam"        (not protected)
+    """
+    if name in PROTECTED_COMPOUNDS:
+        return name
+    for salt in SALT_FORMS:
+        name = re.sub(rf'\b{re.escape(salt)}\b', ' ', name)
+    return re.sub(r'\s+', ' ', name).strip()
+
 
 def sanitize_drug_name(raw_name: str) -> str:
     """
     약물명에서 용량, 제형, 염 형태를 제거하고 generic name만 추출.
 
+    복합제(combination drug)는 "and" 기준으로 컴포넌트 분리 후
+    각각 정규화해서 "A / B" 형식으로 합침.
+    → RAG pipeline RxNorm 결과와 형식 통일.
+
     (참고: EventNormalized.normalize_drug_name field_validator와 이름이
-    겹치지 않도록 sanitize_drug_name으로 명명함. 이 함수는 raw description
-    문자열 전처리 담당, validator는 이미 만들어진 값에 대한 최종 검증 담당.)
+    겹치지 않도록 sanitize_drug_name으로 명명함.)
 
     예시:
-        "MIDAZOLAM HCl 1mg/mL Injection, 10mL vials" → "midazolam"
-        "Vancomycin HCl 500mg powder for injection"   → "vancomycin"
-        "Heparin Sodium 5000 USP units/mL Injection"  → "heparin"
+        "MIDAZOLAM HCl 1mg/mL Injection, 10mL vials"           → "midazolam"
+        "Piperacillin and Tazobactam 4.5g powder for injection" → "piperacillin / tazobactam"
+        "Heparin Sodium 5000 USP units/mL Injection"            → "heparin sodium"  (protected)
+        "Sodium Chloride 0.9% Injection, 100mL bags"            → "sodium chloride" (protected)
+        "Morphine Sulfate 10mg/mL Injection"                    → "morphine"
     """
     name = raw_name.lower().strip()
 
-    # 1. 콤마 이후 제거 (예: "1mg/mL Injection, 10mL vials" → "10mL vials" 부분 제거)
+    # 1. 콤마 이후 제거
     name = name.split(",")[0]
 
-    # 2. 용량 제거
-    # 숫자 + 단위 패턴 (예: 1mg/mL, 500mg, 5000 USP units/mL, 0.05mcg, 50%)
+    # 2. 용량 제거 (숫자 + 단위 패턴)
     name = re.sub(
         r'\d+\.?\d*\s*(mg|mcg|g|ml|l|units?|usp\s*units?|iu|meq|%)[\s\/\w]*',
         ' ', name
     )
 
-    # 3. 괄호 안 내용 제거 (예: (1:1000), (1:10000))
+    # 3. 괄호 안 내용 제거 (예: (1:1000))
     name = re.sub(r'\(.*?\)', '', name)
 
     # 4. 제형 제거
     for form in DOSE_FORMS:
         name = re.sub(rf'\b{re.escape(form)}\b', ' ', name)
 
-    # 5. 염 형태 제거
-    for salt in SALT_FORMS:
-        name = re.sub(rf'\b{re.escape(salt)}\b', ' ', name)
-
-    # 6. 공백 정리
+    # 5. 공백 정리
     name = re.sub(r'\s+', ' ', name).strip()
 
-    return name
+    # 6. 복합제 처리: "and" 기준으로 컴포넌트 분리
+    # 예: "piperacillin and tazobactam" → "piperacillin / tazobactam"
+    parts = re.split(r'\s+and\s+', name)
+    if len(parts) > 1:
+        return ' / '.join(_strip_salt(p.strip()) for p in parts)
+
+    # 7. 단일 화합물: protected 체크 후 salt 제거
+    return _strip_salt(name)
 
 
 def normalize_ndc(raw_ndc: str) -> str:
@@ -99,7 +148,6 @@ def normalize_ndc(raw_ndc: str) -> str:
     """
     raw_ndc = raw_ndc.strip()
 
-    # 하이픈이 있으면 세그먼트 구조 인식
     if "-" in raw_ndc:
         segments = raw_ndc.split("-")
 
@@ -112,18 +160,13 @@ def normalize_ndc(raw_ndc: str) -> str:
         labeler, product, package = segments
         seg_lengths = (len(labeler), len(product), len(package))
 
-        # 세그먼트 길이 기준으로 0 패딩 위치 결정
         if seg_lengths == (4, 4, 2):
-            # 4-4-2 → labeler 앞에 0 추가
             labeler = labeler.zfill(5)
         elif seg_lengths == (5, 3, 2):
-            # 5-3-2 → product 앞에 0 추가
             product = product.zfill(4)
         elif seg_lengths == (5, 4, 1):
-            # 5-4-1 → package 앞에 0 추가
             package = package.zfill(2)
         elif seg_lengths == (5, 4, 2):
-            # 이미 올바른 형식
             pass
         else:
             raise ValueError(
@@ -134,7 +177,6 @@ def normalize_ndc(raw_ndc: str) -> str:
         digits = labeler + product + package
 
     else:
-        # 하이픈 없는 경우 — 자리수로 판단
         digits = re.sub(r'\s', '', raw_ndc)
         if len(digits) < 11:
             digits = digits.zfill(11)
@@ -166,45 +208,11 @@ def normalize_classification(raw: str | None) -> Classification | None:
 def normalize_event(raw: dict) -> EventNormalized:
     """
     FDA 원본 recall JSON 하나를 받아서 EventNormalized로 변환.
-
-    Args:
-        raw: FDA recall JSON 딕셔너리 (recall_samples.json의 항목 하나)
-
-    Returns:
-        EventNormalized: 정규화된 이벤트 스키마
-
-    예시 입력:
-        {
-            "recall_number": "D-001-2026",
-            "product_description": "Midazolam HCl 1mg/mL Injection, 10mL vials",
-            "classification": "Class I",
-            "product_ndc": "0641-6014-41",
-            "lot_number": "LOT-A1",
-            "recall_initiation_date": "2026-01-10",
-            "reason_for_recall": "Subpotent drug",
-            "status": "ongoing"
-        }
-
-    예시 출력:
-        EventNormalized(
-            event_id="D-001-2026",
-            event_type=EventType.RECALL,
-            drug_name="midazolam",
-            ndc="00641601441",
-            lot="LOT-A1",
-            classification=Classification.CLASS_I,
-            status="ongoing",
-            recall_initiation_date=date(2026, 1, 10),
-            recall_number="D-001-2026",
-            product_description="Midazolam HCl 1mg/mL Injection, 10mL vials",
-            reason_for_recall="Subpotent drug"
-        )
     """
     drug_name = sanitize_drug_name(raw["product_description"])
     ndc = normalize_ndc(raw["product_ndc"])
     classification = normalize_classification(raw.get("classification"))
 
-    # 날짜 변환 ("2026-01-10" → date 객체)
     raw_date = raw.get("recall_initiation_date")
     recall_date = date.fromisoformat(raw_date) if raw_date else None
 
@@ -217,7 +225,6 @@ def normalize_event(raw: dict) -> EventNormalized:
         classification=classification,
         status=raw.get("status", "ongoing"),
         recall_initiation_date=recall_date,
-        # RAG/evidence retrieval 및 ticket handoff을 위한 원본 필드 보존
         recall_number=raw["recall_number"],
         product_description=raw["product_description"],
         reason_for_recall=raw.get("reason_for_recall"),
