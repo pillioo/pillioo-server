@@ -1,7 +1,7 @@
 """initial tables
 
 Revision ID: 0f4db5b7949c
-Revises: 
+Revises:
 Create Date: 2026-06-26 02:21:43.325349
 
 """
@@ -31,49 +31,49 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_tickets_id'), 'tickets', ['id'], unique=False)
     op.create_table(
-    'approvals',
-    sa.Column('ticket_id', sa.Integer(), nullable=False),
-    sa.Column('reviewer', sa.String(), nullable=False),
-    sa.Column('status', sa.String(), nullable=False),
-    sa.Column('comment', sa.Text(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
-    sa.PrimaryKeyConstraint('id')
-)
-op.create_index('ix_approvals_ticket_id', 'approvals', ['ticket_id'], unique=False)
-op.create_index(op.f('ix_approvals_id'), 'approvals', ['id'], unique=False)
+        'approvals',
+        sa.Column('ticket_id', sa.Integer(), nullable=False),
+        sa.Column('reviewer', sa.String(), nullable=False),
+        sa.Column('status', sa.String(), nullable=False),
+        sa.Column('comment', sa.Text(), nullable=True),
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_approvals_ticket_id', 'approvals', ['ticket_id'], unique=False)
+    op.create_index(op.f('ix_approvals_id'), 'approvals', ['id'], unique=False)
 
-op.create_table(
-    'audit_logs',
-    sa.Column('ticket_id', sa.Integer(), nullable=False),
-    sa.Column('step_name', sa.String(), nullable=False),
-    sa.Column('input_json', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('output_json', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('duration_ms', sa.Integer(), nullable=True),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
-    sa.PrimaryKeyConstraint('id')
-)
-op.create_index('ix_audit_logs_ticket_id', 'audit_logs', ['ticket_id'], unique=False)
-op.create_index(op.f('ix_audit_logs_id'), 'audit_logs', ['id'], unique=False)
+    op.create_table(
+        'audit_logs',
+        sa.Column('ticket_id', sa.Integer(), nullable=False),
+        sa.Column('step_name', sa.String(), nullable=False),
+        sa.Column('input_json', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('output_json', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('duration_ms', sa.Integer(), nullable=True),
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_audit_logs_ticket_id', 'audit_logs', ['ticket_id'], unique=False)
+    op.create_index(op.f('ix_audit_logs_id'), 'audit_logs', ['id'], unique=False)
 
-op.create_table(
-    'report_versions',
-    sa.Column('ticket_id', sa.Integer(), nullable=False),
-    sa.Column('version_tag', sa.String(), nullable=False),
-    sa.Column('report_text', sa.Text(), nullable=False),
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
-    sa.PrimaryKeyConstraint('id')
-)
-op.create_index('ix_report_versions_ticket_id', 'report_versions', ['ticket_id'], unique=False)
-op.create_index(op.f('ix_report_versions_id'), 'report_versions', ['id'], unique=False)
+    op.create_table(
+        'report_versions',
+        sa.Column('ticket_id', sa.Integer(), nullable=False),
+        sa.Column('version_tag', sa.String(), nullable=False),
+        sa.Column('report_text', sa.Text(), nullable=False),
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(['ticket_id'], ['tickets.id']),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_report_versions_ticket_id', 'report_versions', ['ticket_id'], unique=False)
+    op.create_index(op.f('ix_report_versions_id'), 'report_versions', ['id'], unique=False)
     # ### end Alembic commands ###
 
 

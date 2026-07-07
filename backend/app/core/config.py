@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
-        env_prefix = ""  # 접두사 없이 직접 매핑
+        env_prefix = "" 
+        extra = "ignore"  # Ignore RAG/Milvus settings in .env because they are not used here.
 
 settings = Settings()
