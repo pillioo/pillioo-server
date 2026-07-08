@@ -23,8 +23,23 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
     샘플 recall 이벤트 JSON을 받아서 정규화, 중복 체크 후 티켓 생성.
     """
     try:
-        # 1. 정규화 (mode="json"으로 날짜 ISO 문자열 변환)
-        event = normalize_event(payload.model_dump(mode="json"))
+
+        # 1. 페이로드(입력값)를 딕셔너리로 변환
+        raw_data = payload.model_dump(mode="json")
+        
+        # [추가 수정 / 26-07-08] 1번 문지기(스키마)와 2번 문지기(Normalizer) 사이의 통역사 역할!
+        # 스키마를 통과한 소문자 class 데이터를 Normalizer가 좋아하는 FDA 원본 형식으로 바꿔줍니다.
+        class_mapping = {
+            "class_i": "Class I",
+            "class_ii": "Class II",
+            "class_iii": "Class III"
+        }
+        current_class = raw_data.get("classification")
+        if current_class in class_mapping:
+            raw_data["classification"] = class_mapping[current_class]
+
+        # 통역된 데이터로 정규화 실행
+        event = normalize_event(raw_data)
 
         # 2. 중복 체크
         dedup_result = check_and_save_event(event.event_id)
@@ -56,7 +71,7 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
         return EventUploadResponse(
             event_id=event.event_id,
             duplicated=False,
-            ticket_id=ticket.id if ticket else None
+            ticket_id=ticket.ticket_id if ticket else None
         )
 
     except ValueError as e:

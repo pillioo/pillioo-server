@@ -113,7 +113,7 @@ def load_sample_events() -> list[dict]:
 
 # 외부 데이터 자동 수집 메인 파이프라인 (주기적 실행용)
 async def periodic_collect():
-    print("[Collector] 주기적 openFDA 데이터 수집 시작...")
+    print("[Collector] 수동 openFDA 데이터 수집 시작...")
     
     recalls = await fetch_recall_events()
     shortages = await fetch_shortage_events()
