@@ -6,8 +6,6 @@ Called by the Orchestrator at every processing step.
 Enables full audit trail: "why did this ticket go to evidence_review?"
 """
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from app.db.models.audit_log_model import AuditLog
@@ -17,7 +15,7 @@ from app.schemas.workflow import AuditLogEntry
 
 def write_audit_log(
     db: Session,
-    ticket_id: str,
+    ticket_id: int,
     step_name: WorkflowStep,
     input_json: dict,
     output_json: dict,
@@ -54,7 +52,6 @@ def write_audit_log(
         step_name=step_name.value,
         input_json=input_json,
         output_json=output_json,
-        timestamp=datetime.now(timezone.utc),
         duration_ms=duration_ms,
     )
     db.add(entry)
@@ -63,7 +60,7 @@ def write_audit_log(
     return entry
 
 
-def get_audit_trace(db: Session, ticket_id: str) -> list[AuditLogEntry]:
+def get_audit_trace(db: Session, ticket_id: int) -> list[AuditLogEntry]:
     """
     특정 티켓의 전체 처리 기록 조회.
 
@@ -103,11 +100,11 @@ def get_audit_trace(db: Session, ticket_id: str) -> list[AuditLogEntry]:
 
     return [
         AuditLogEntry(
-            ticket_id=log.ticket_id,
+            ticket_id=log.ticket.ticket_id if log.ticket else str(log.ticket_id),
             step_name=log.step_name,
             input_json=log.input_json,
             output_json=log.output_json,
-            timestamp=log.timestamp,
+            timestamp=log.created_at,
             duration_ms=log.duration_ms,
         )
         for log in logs
