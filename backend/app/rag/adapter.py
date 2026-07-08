@@ -46,6 +46,7 @@ def to_sufficiency_check_result(sufficiency: RagSufficiencyResult) -> Sufficienc
         coverage_score=sufficiency.coverage_score,
         evidence_status=sufficiency.evidence_status,
         needs_evidence_review=sufficiency.needs_evidence_review,
+        citations_ready=sufficiency.citations_ready,
     )
 
 
