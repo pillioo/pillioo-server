@@ -47,6 +47,7 @@ class SufficiencyCheckResult(BaseModel):
     coverage_score: float = Field(..., ge=0.0, le=1.0)
     evidence_status: EvidenceStatus
     needs_evidence_review: bool
+    citations_ready: bool = True
 
     @model_validator(mode="after")
     def check_status_matches_missing(self) -> "SufficiencyCheckResult":

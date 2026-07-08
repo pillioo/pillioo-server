@@ -27,6 +27,8 @@ class TicketStatus(str, Enum):
     DRAFT_GENERATED = "DRAFT_GENERATED"
     SAFETY_CHECKED = "SAFETY_CHECKED"
     REVIEW_ROUTED = "REVIEW_ROUTED"
+    # Distinguishes retryable execution failures from normal HITL routing.
+    WORKFLOW_FAILED = "WORKFLOW_FAILED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     CLOSED = "CLOSED"
