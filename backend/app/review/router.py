@@ -19,10 +19,12 @@ from sqlalchemy.orm import Session
 
 from app.audit.logger import get_audit_trace
 from app.db.models.approval_model import Approval
+from app.db.models.ticket import Ticket
 from app.db.session import get_db
 from app.report.versioning import get_latest_report, get_report_versions
 from app.review.approval import handle_approve, handle_reject, handle_revise
 from app.review.errors import ReviewError, raise_review_error
+from app.review.tickets import get_ticket_by_public_id
 from app.schemas.common import ApprovalStatus
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
 
@@ -71,6 +73,7 @@ async def get_pending_approvals(
     return [
         {
             "ticket_id": a.ticket_id,
+            "public_ticket_id": a.ticket.ticket_id if a.ticket else None,
             "approval_status": a.status,
             "created_at": a.created_at,
         }
@@ -97,10 +100,11 @@ async def approve_ticket(
     from app.db.models.report_version_model import ReportVersion as ReportVersionModel
     from app.schemas.common import ReportVersionTag
 
+    ticket = get_ticket_by_public_id(db, ticket_id)
     existing_final = (
         db.query(ReportVersionModel)
         .filter(
-            ReportVersionModel.ticket_id == ticket_id,
+            ReportVersionModel.ticket_id == ticket.id,
             ReportVersionModel.version_tag == ReportVersionTag.FINAL_V1.value,
         )
         .first()
@@ -116,17 +120,18 @@ async def approve_ticket(
     # state = get_ticket_state(db, ticket_id)
     # current_draft = state.draft_text
     # 현재는 최신 버전에서 가져오는 방식으로 대체
-    latest = get_latest_report(db=db, ticket_id=ticket_id)
+    latest = get_latest_report(db=db, ticket_id=ticket.id)
     if not latest:
         raise_review_error(
             ReviewError.REPORT_NOT_FOUND,
             {"ticket_id": ticket_id}
         )
-    current_draft = latest.content
+    current_draft = latest.report_text
 
     return handle_approve(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
+        public_ticket_id=ticket.ticket_id,
         request=request,
         current_draft=current_draft,
     )
@@ -142,9 +147,11 @@ async def reject_ticket(
     약사 반려 처리.
     반려 사유 필수 입력.
     """
+    ticket = get_ticket_by_public_id(db, ticket_id)
     return handle_reject(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
+        public_ticket_id=ticket.ticket_id,
         request=request,
     )
 
@@ -160,9 +167,11 @@ async def revise_ticket(
     수정된 초안을 safety check 재실행 후 draft_v2 저장.
     재차단 문장 있으면 needs_action_review: True 반환.
     """
+    ticket = get_ticket_by_public_id(db, ticket_id)
     return handle_revise(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
+        public_ticket_id=ticket.ticket_id,
         request=request,
     )
 
@@ -180,7 +189,8 @@ async def get_audit_log(
     특정 티켓의 전체 처리 기록 반환.
     "왜 이 티켓이 evidence_review로 갔는가" 추적 가능.
     """
-    trace = get_audit_trace(db=db, ticket_id=ticket_id)
+    ticket = get_ticket_by_public_id(db, ticket_id)
+    trace = get_audit_trace(db=db, ticket_id=ticket.id)
 
     if not trace:
         raise_review_error(
@@ -200,7 +210,8 @@ async def get_report_version_list(
     특정 티켓의 모든 보고서 버전 목록 반환.
     draft_v1 → draft_v2 → final_v1 순서로 조회.
     """
-    versions = get_report_versions(db=db, ticket_id=ticket_id)
+    ticket = get_ticket_by_public_id(db, ticket_id)
+    versions = get_report_versions(db=db, ticket_id=ticket.id)
 
     if not versions:
         raise_review_error(
@@ -219,7 +230,8 @@ async def get_latest_report_version(
     """
     특정 티켓의 가장 최신 보고서 버전 반환.
     """
-    version = get_latest_report(db=db, ticket_id=ticket_id)
+    ticket = get_ticket_by_public_id(db, ticket_id)
+    version = get_latest_report(db=db, ticket_id=ticket.id)
 
     if not version:
         raise_review_error(

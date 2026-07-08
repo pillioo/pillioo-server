@@ -21,7 +21,8 @@ from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
 
 def handle_approve(
     db: Session,
-    ticket_id: str,
+    ticket_id: int,
+    public_ticket_id: str,
     request: ApproveRequest,
     current_draft: str,
 ) -> dict:
@@ -84,7 +85,7 @@ def handle_approve(
     db.commit()
     
     return {
-        "ticket_id": ticket_id,
+        "ticket_id": public_ticket_id,
         "approval_status": ApprovalStatus.APPROVED.value,
         "final_report_version": ReportVersionTag.FINAL_V1.value,
     }
@@ -92,7 +93,8 @@ def handle_approve(
 
 def handle_reject(
     db: Session,
-    ticket_id: str,
+    ticket_id: int,
+    public_ticket_id: str,
     request: RejectRequest,
 ) -> dict:
     """
@@ -143,7 +145,7 @@ def handle_reject(
     db.commit()
 
     return {
-        "ticket_id": ticket_id,
+        "ticket_id": public_ticket_id,
         "approval_status": ApprovalStatus.REJECTED.value,
         "comment": request.comment,
     }
@@ -151,7 +153,8 @@ def handle_reject(
 
 def handle_revise(
     db: Session,
-    ticket_id: str,
+    ticket_id: int,
+    public_ticket_id: str,
     request: ReviseRequest,
 ) -> dict:
     """
@@ -231,7 +234,7 @@ def handle_revise(
     db.commit()
 
     return {
-        "ticket_id": ticket_id,
+        "ticket_id": public_ticket_id,
         "approval_status": ApprovalStatus.PENDING.value,
         "new_version": new_version,
         "safety_check_passed": not safety_result.needs_action_review,
