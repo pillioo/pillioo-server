@@ -277,6 +277,9 @@ def detect_category(
     Returns:
         BlockedCategory | None
     """
+    if lang not in {"both", "ko", "en"}:
+        raise ValueError(f"Unsupported lang: {lang!r}. Expected one of: both, ko, en")
+
     if lang in ("both", "ko"):
         for category, patterns in KO_UNSAFE_PATTERNS.items():
             for pattern in patterns:
