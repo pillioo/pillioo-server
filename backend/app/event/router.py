@@ -118,7 +118,8 @@ async def trigger_openfda_collection():
                 try:
                     create_ticket(event)
                     processed_summary["recalls"]["tickets_created"] += 1
-                except Exception:
+                except Exception as e:
+                    print(f"[Router] 티켓 생성 실패, 롤백합니다: {event.event_id}, error={e}")
                     release_event(event.event_id) # 티켓 발행 실패 시 롤백
         except Exception as e:
             print(f"[Router] recall 이벤트 처리 실패, 건너뜁니다: {raw_event.get('recall_number')}, error={e}")
