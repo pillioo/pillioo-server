@@ -6,7 +6,8 @@ Handles recall event upload and triggers normalization + dedup + ticket creation
 """
 import hashlib
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+
 
 from app.event.normalizer import normalize_event
 from app.schemas.io import EventUploadRequest, EventUploadResponse
@@ -15,9 +16,10 @@ from app.event.dedup import check_and_save_event, release_event
 from app.event.ticket_creator import create_ticket
 from app.event.collector import periodic_collect
 
+
 router = APIRouter(prefix="/events", tags=["events"])
 
-# [코드래빗 피드백 반영] 식별자가 없을 때 원본 데이터를 해싱하여 안정적인 고유 ID 생성
+# 식별자가 없을 때 원본 데이터를 해싱하여 안정적인 고유 ID 생성
 def generate_fallback_id(data: dict) -> str:
     # 딕셔너리 키를 정렬하여 항상 일정한 문자열이 나오도록 보장
     payload_str = json.dumps(data, sort_keys=True)
@@ -34,7 +36,7 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
         # 1. 페이로드(입력값)를 딕셔너리로 변환
         raw_data = payload.model_dump(mode="json")
         
-        # [추가 수정 / 26-07-08] 1번 문지기(스키마)와 2번 문지기(Normalizer) 사이의 통역사 역할!
+        # 1번 스키마와 2번 Normalizer 사이의 통역사 역할
         # 스키마를 통과한 소문자 class 데이터를 Normalizer가 좋아하는 FDA 원본 형식으로 바꿔줍니다.
         class_mapping = {
             "class_i": "Class I",
@@ -88,7 +90,7 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
 @router.post("/collect", summary="openFDA 이벤트 수동 수집")
 async def trigger_openfda_collection():
     """
-    팀원 피드백 반영: 스케줄러 대신 사용자가 명시적으로 호출하는 수동 트리거 엔드포인트.
+    스케줄러 대신 사용자가 명시적으로 호출하는 수동 트리거 엔드포인트.
     프론트엔드에서 'openFDA 수집 실행' 버튼 클릭 시 이 API를 호출합니다.
     """
     print("[Router] 프론트엔드 요청으로 openFDA 수동 수집을 시작합니다...")
@@ -130,12 +132,37 @@ async def trigger_openfda_collection():
         "summary": processed_summary
     }
 
+from app.db.session import get_db
+from app.db.models.ticket import Ticket
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
 @router.get("/latest")
-async def get_latest_events():
+async def get_latest_events(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+):
     """
-    최근 수집된 이벤트 목록 조회
+    최근 수집된 이벤트 목록 조회.
+    티켓 생성 시간 기준 최신순으로 반환.
+    """
+    tickets = (
+        db.query(Ticket)
+        .order_by(Ticket.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
-    TODO: 2주차에 구현 (P5 DB 준비 완료 후)
-    """
-    return {"message": "Not implemented yet"}
+    return [
+        {
+            "ticket_id": ticket.ticket_id,
+            "event_type": ticket.event_type,
+            "drug_name": ticket.drug_name,
+            "ndc": ticket.ndc,
+            "classification": ticket.classification,
+            "status": ticket.status,
+            "workflow_stage": ticket.workflow_stage,
+            "created_at": ticket.created_at,
+        }
+        for ticket in tickets
+    ]
