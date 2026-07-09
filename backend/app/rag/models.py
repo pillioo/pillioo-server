@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -173,5 +174,12 @@ class EvidenceResult:
 def list_values(value: Any) -> list[str]:
     if value is None:
         return []
-    values = value if isinstance(value, list) else [value]
+    # pymilvus search() returns ARRAY fields as a protobuf RepeatedScalarContainer,
+    # not a list, so isinstance(value, list) alone misses it.
+    if isinstance(value, (str, bytes)):
+        values = [value]
+    elif isinstance(value, Iterable):
+        values = list(value)
+    else:
+        values = [value]
     return [str(item) for item in values if item is not None and str(item).strip()]

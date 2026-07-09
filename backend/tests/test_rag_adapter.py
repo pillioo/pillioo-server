@@ -58,6 +58,14 @@ def test_to_schema_chunk_and_citation_clamp_negative_score() -> None:
     assert citation.score == 0.0
 
 
+def test_to_schema_chunk_and_citation_clamp_score_above_one() -> None:
+    schema_chunk = to_schema_chunk(chunk(score=1.4))
+    citation = to_citation(chunk(score=1.4))
+
+    assert schema_chunk.similarity_score == 1.0
+    assert citation.score == 1.0
+
+
 def test_to_evidence_result_maps_chunks_to_top_chunks_and_citations() -> None:
     result = EvidenceResult(
         query="q",
