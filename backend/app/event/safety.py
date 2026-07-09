@@ -6,6 +6,15 @@ and replaces them with a safe placeholder.
 
 Called by Orchestrator after draft generation.
 Returns SafetyCheckResult with blocked sentences and revised draft.
+
+Language support:
+    both: ko + en 둘 다 검사 (기본값 — 언어 혼용 대응)
+    ko: Korean substring matching only
+    en: English regex matching only (handles morphological variants)
+
+Bilingual by design:
+    Draft output may mix Korean and English regardless of output language setting.
+    Always check both patterns to avoid missed unsafe expressions.
 """
 
 import re
@@ -14,11 +23,13 @@ from app.schemas.common import BlockedCategory
 from app.schemas.event import BlockedSentence, SafetyCheckResult
 
 
-REPLACEMENT = "담당 약사 확인 후 조치하세요."
+REPLACEMENT = "Please consult the pharmacist before taking action."
 
-# 카테고리별 위험 키워드 패턴
-# 정확한 표현 + 변형 표현 모두 포함
-UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
+# ──────────────────────────────────────────────
+# 한국어 패턴 (substring matching)
+# ──────────────────────────────────────────────
+
+KO_UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
     BlockedCategory.DIRECT_MEDICAL_INSTRUCTION: [
         # 투여 중단
         "즉시 투여",
@@ -36,6 +47,7 @@ UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
         "복용 중단",
         "복용을 멈추",
         "복용을 금지",
+        "복용하지 마세요",
         # 사용 중단
         "사용 중단",
         "사용을 중단",
@@ -76,16 +88,17 @@ UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
         "대신 사용",
         "대신 투여",
         "대신 복용",
-        # 변경 - 의료 맥락에 특화된 패턴
+        # 변경
         "약으로 변경",
         "약물로 변경",
         "제품으로 변경",
         "제제로 변경",
+        "대체약으로 변경",
         "변경하세요",
         "변경 바랍니다",
         "변경해 주세요",
         "변경하시기 바랍니다",
-        # 전환 - 의료 맥락에 특화된 패턴
+        # 전환
         "약으로 전환",
         "약물로 전환",
         "제품으로 전환",
@@ -146,7 +159,7 @@ UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
         "위험하지 않으니",
         "위험이 없습니다",
         "위험이 없으니",
-        # 계속 사용 권장 - 긍정적 권장 맥락에 특화
+        # 계속 사용 권장
         "계속 사용하세요",
         "계속 사용 가능",
         "계속 사용해도 됩니다",
@@ -170,24 +183,140 @@ UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
     ],
 }
 
+# ──────────────────────────────────────────────
+# 영어 패턴 (regex matching — 어미 변화 대응)
+# ──────────────────────────────────────────────
 
-def detect_category(sentence: str) -> BlockedCategory | None:
+EN_UNSAFE_PATTERNS: dict[BlockedCategory, list[str]] = {
+    BlockedCategory.DIRECT_MEDICAL_INSTRUCTION: [
+        # discontinue variants
+        r'\bdiscontinue\b',
+        r'\bdiscontinued\b',
+        r'\bdiscontinuing\b',
+        r'\bdiscontinuation\b',
+        # stop/halt/cease administration
+        r'\bstop\s+(administration|use|dosing|treatment)\b',
+        r'\bhalt\s+(administration|use|dosing)\b',
+        r'\bcease\s+(administration|use|dosing)\b',
+        # do not administer
+        r'\bdo\s+not\s+administer\b',
+        r'\bdo\s+not\s+use\b',
+        r'\bdo\s+not\s+dispense\b',
+        # withhold
+        r'\bwithhold\b',
+        r'\bimmediately\s+stop\b',
+        r'\bimmediately\s+discontinue\b',
+        r'\bstop\s+administration\s+immediately\b',
+    ],
+    BlockedCategory.SUBSTITUTION_RECOMMENDATION: [
+        # replace/substitute
+        r'\breplace\s+with\b',
+        r'\bsubstitute\s+with\b',
+        r'\bsubstitute\s+for\b',
+        r'\bswitch\s+to\b',
+        r'\bchange\s+to\b',
+        r'\bconvert\s+to\b',
+        # use alternative
+        r'\buse\s+(an?\s+)?alternative\b',
+        r'\balternative\s+medication\b',
+        r'\balternative\s+drug\b',
+        r'\balternate\s+therapy\b',
+        r'\breplace\s+with\s+another\b',
+    ],
+    BlockedCategory.DISPOSAL_INSTRUCTION: [
+        # discard/dispose
+        r'\bdiscard\b',
+        r'\bdispose\s+of\b',
+        r'\bdestroy\b',
+        r'\brecall\s+and\s+discard\b',
+        # return/destroy
+        r'\breturn\s+(to|all)\b',
+        r'\bremove\s+from\s+(use|stock|circulation)\b',
+        r'\bquarantine\s+and\s+destroy\b',
+        r'\bimmediately\s+discard\b',
+        r'\bimmediately\s+dispose\b',
+        r'\bdiscard\s+the\s+affected\b',
+    ],
+    BlockedCategory.CERTAINTY_WITHOUT_APPROVAL: [
+        # safe to use
+        r'\bsafe\s+to\s+(use|administer|continue)\b',
+        r'\bno\s+risk\b',
+        r'\bno\s+harm\b',
+        r'\bno\s+safety\s+concern\b',
+        # continue use
+        r'\bcontinue\s+(use|administration|dosing|treatment)\b',
+        r'\bmay\s+continue\b',
+        r'\bcan\s+continue\b',
+        # effective/guaranteed
+        r'\bguaranteed\s+(safe|effective)\b',
+        r'\bconfirmed\s+safe\b',
+        r'\bno\s+action\s+required\b',
+    ],
+}
+
+
+# ──────────────────────────────────────────────
+# Detection functions
+# ──────────────────────────────────────────────
+
+def detect_category(
+    sentence: str,
+    lang: str = "both",
+) -> BlockedCategory | None:
     """
     문장이 어떤 위험 카테고리에 해당하는지 판단.
     해당 없으면 None 반환.
+
+    Args:
+        sentence: 검사할 문장
+        lang: 언어 ("both" 기본값)
+            - both: ko + en 둘 다 검사 (언어 혼용 대응)
+            - ko: 한국어 substring 매칭만
+            - en: 영어 regex 매칭만
+
+    Returns:
+        BlockedCategory | None
     """
-    for category, patterns in UNSAFE_PATTERNS.items():
-        for pattern in patterns:
-            if pattern in sentence:
-                return category
+    if lang not in {"both", "ko", "en"}:
+        raise ValueError(f"Unsupported lang: {lang!r}. Expected one of: both, ko, en")
+
+    if lang in ("both", "ko"):
+        for category, patterns in KO_UNSAFE_PATTERNS.items():
+            for pattern in patterns:
+                if pattern in sentence:
+                    return category
+
+    if lang in ("both", "en"):
+        for category, patterns in EN_UNSAFE_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, sentence, re.IGNORECASE):
+                    return category
+
     return None
 
+
+def scan_evidence_sentence(sentence: str) -> BlockedCategory | None:
+    """
+    영어 evidence 문서에서 단일 문장을 검사.
+    파이프라인 [4]→[5] 지점 (Evidence Retrieval → Sufficiency Check) 에서 호출.
+
+    Args:
+        sentence: 영어 evidence 문서의 단일 문장
+
+    Returns:
+        BlockedCategory | None
+    """
+    return detect_category(sentence, lang="en")
+
+
+# ──────────────────────────────────────────────
+# Draft safety check
+# ──────────────────────────────────────────────
 
 def _find_sentence_spans(text: str) -> list[tuple[int, int]]:
     """
     텍스트에서 문장의 시작/끝 위치(span)를 찾아 반환.
     줄바꿈 기준으로 분리.
-    원본 텍스트의 위치 정보를 보존해서 나중에 정확히 교체할 수 있게 함.
     """
     spans = []
     for match in re.finditer(r'[^\n]+', text):
@@ -204,6 +333,10 @@ def draft_safety_check(draft_text: str, lang: str = "both") -> SafetyCheckResult
 
     Args:
         draft_text: LLM이 생성한 보고서 초안 전체 텍스트
+        lang: 언어 ("both" 기본값 — ko/en 둘 다 검사)
+            - both: 언어 혼용 대응 (기본값)
+            - ko: 한국어만 검사 (명시적으로 한국어 전용일 때)
+            - en: 영어만 검사 (명시적으로 영어 전용일 때)
 
     Returns:
         SafetyCheckResult:
@@ -213,12 +346,11 @@ def draft_safety_check(draft_text: str, lang: str = "both") -> SafetyCheckResult
     """
     blocked_sentences = []
     spans = _find_sentence_spans(draft_text)
-
     revised_draft = draft_text
 
     for start, end in reversed(spans):
         sentence = draft_text[start:end]
-        category = detect_category(sentence)
+        category = detect_category(sentence, lang=lang)
 
         if category:
             blocked_sentences.insert(
