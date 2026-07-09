@@ -1,5 +1,5 @@
 """
-P4 - Review Router
+Review Router
 
 FastAPI router for pharmacist review workspace endpoints.
 
@@ -28,6 +28,10 @@ from app.review.tickets import get_ticket_by_public_id
 from app.schemas.common import ApprovalStatus
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
 
+from app.orchestration.state import ticket_to_state
+from app.review.payload import build_review_payload
+from app.schemas.common import TicketStatus
+
 router = APIRouter(tags=["review"])
 
 
@@ -41,20 +45,39 @@ async def get_review_payload(
     db: Session = Depends(get_db),
 ):
     """
-    약사가 티켓 하나를 열었을 때 보는 전체 화면 데이터 반환.
-    review_type에 맞는 payload 구성.
-
-    TODO: Jimin Orchestrator 완성 후 실제 TicketState 조회로 교체
+    Returns the full review screen payload when a pharmacist opens a ticket.
+    - Raises REVIEW_NOT_FOUND if ticket status is WORKFLOW_FAILED.
+    - Raises REVIEW_NOT_FOUND if review_type is not yet determined.
+    - Returns review payload if review_type is available.
     """
-    # TODO: 실제 TicketState 조회로 교체
-    # state = get_ticket_state(db, ticket_id)
-    # if not state:
-    #     raise_review_error(ReviewError.TICKET_NOT_FOUND, {"ticket_id": ticket_id})
-    # return build_review_payload(state)
-    raise_review_error(
-        ReviewError.REVIEW_NOT_FOUND,
-        {"ticket_id": ticket_id, "reason": "Orchestrator connection pending"}
-    )
+   
+    ticket = get_ticket_by_public_id(db, ticket_id)
+
+
+# Ticket is in a failed state — requires manual intervention before review
+    if ticket.status == TicketStatus.WORKFLOW_FAILED.value:
+        raise_review_error(
+            ReviewError.REVIEW_NOT_FOUND,
+            {
+                "ticket_id": ticket_id,
+                "reason": "Workflow failed — manual intervention required",
+                "status": ticket.status,
+            }
+        )
+    # Convert DB ticket to TicketState and build review payload
+    state = ticket_to_state(ticket)
+
+    if not state.review_type:
+        raise_review_error(
+            ReviewError.REVIEW_NOT_FOUND,
+            {
+                "ticket_id": ticket_id,
+                "reason": "Review type not yet determined",
+                "status": ticket.status,
+            }
+        )
+
+    return build_review_payload(state)
 
 @router.get("/approval/pending")
 async def get_pending_approvals(
@@ -116,10 +139,7 @@ async def approve_ticket(
             {"ticket_id": ticket_id, "reason": "final_v1 already exists for this ticket"},
         )
 
-    # TODO: 실제 TicketState에서 draft_text 가져오도록 교체
-    # state = get_ticket_state(db, ticket_id)
-    # current_draft = state.draft_text
-    # 현재는 최신 버전에서 가져오는 방식으로 대체
+    # Fetch latest draft version saved by Orchestrator (draft_v1 or draft_v2)
     latest = get_latest_report(db=db, ticket_id=ticket.id)
     if not latest:
         raise_review_error(
