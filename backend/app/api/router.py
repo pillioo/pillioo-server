@@ -19,4 +19,4 @@ async def health_db(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         return {"db": "connected"}
     except SQLAlchemyError as e:
-        return {"db": "connection_error", "detail": str(e)}
+        return {"db": "connection_error", "detail": "Database connection failed"}
