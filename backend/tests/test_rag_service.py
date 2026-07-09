@@ -18,6 +18,15 @@ class FakeRetriever:
     def __init__(self, chunks: list[EvidenceChunk]) -> None:
         self.chunks = chunks
         self.calls: list[dict[str, object]] = []
+        self.last_filter_attempts = [
+            {
+                "target_document_type": "recall_notice",
+                "level": "strong_identifier_section",
+                "expr": 'document_type == "recall_notice"',
+                "hit_count": 1,
+                "stopped_on_hits": True,
+            }
+        ]
 
     def retrieve(
         self,
@@ -69,11 +78,14 @@ def test_metadata_filter_builder_produces_fallback_levels() -> None:
         EvidenceTarget("label", sections=["warnings", "contraindications"]),
     )
 
-    assert levels[0].expr == (
+    assert levels[0].level == "strong_identifier_section"
+    assert 'rxnorm_rxcui == "74169"' in levels[0].expr
+    assert 'section == "warnings"' in levels[0].expr
+    assert levels[1].expr == (
         'document_type == "label" and ARRAY_CONTAINS(event_types, "label_update") and rxnorm_rxcui == "74169"'
     )
-    assert levels[0].level == "strong_identifier"
-    assert 'section == "warnings"' in levels[1].expr
+    assert levels[1].level == "strong_identifier"
+    assert 'section == "warnings"' in levels[2].expr
     assert levels[-1].expr == 'document_type == "label" and ARRAY_CONTAINS(event_types, "label_update")'
 
 
@@ -109,9 +121,13 @@ def test_metadata_filter_builder_escapes_filter_string_literals() -> None:
     )
 
     assert levels[0].expr == (
+        f'{escaped_base} and recall_number == "D-1\\" or recall_number != \\"D-1" '
+        'and section == "recall_notice\\\\urgent\\""'
+    )
+    assert levels[1].expr == (
         f'{escaped_base} and recall_number == "D-1\\" or recall_number != \\"D-1"'
     )
-    assert levels[1].expr == f'{escaped_base} and section == "recall_notice\\\\urgent\\""'
+    assert levels[2].expr == f'{escaped_base} and section == "recall_notice\\\\urgent\\""'
 
 
 def test_metadata_aware_reranker_promotes_identifier_matches() -> None:
@@ -192,3 +208,11 @@ def test_retrieval_service_orchestrates_retrieval_components() -> None:
     assert retriever.calls[0]["filter_override"] == 'document_type == "recall_notice"'
     assert [item.document_type for item in result.chunks] == ["recall_notice", "policy", "sop"]
     assert result.sufficiency.evidence_status == "sufficient"
+    assert result.retrieval_trace["counts"] == {
+        "candidate_chunks": 4,
+        "deduped_chunks": 3,
+        "reranked_chunks": 3,
+        "selected_chunks": 3,
+    }
+    assert result.retrieval_trace["filter_attempts"][0]["level"] == "strong_identifier_section"
+    assert result.retrieval_trace["selected_chunks"][0]["chunk_id"] == "chunk-1"
