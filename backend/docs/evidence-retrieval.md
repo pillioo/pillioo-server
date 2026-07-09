@@ -45,11 +45,15 @@ Current implemented pieces:
 Known limitations:
 
 - Hybrid search is not yet implemented as a first-class strategy.
-- Filter fallback quality needs more evaluation against real/golden queries.
 - Reranking is metadata-aware but not yet calibrated against retrieval metrics.
 - Ticket-scoped chat is not yet connected.
 - Citation-aware response generation still needs a clear contract.
 - Inventory no-match and retrieval sufficiency need coordinated test scenarios.
+
+Filter fallback and identifier-boosted reranking now have golden-query
+coverage against real Milvus data (15 cases in
+`scripts/rag/eval/golden_queries.yaml`, including NDC/lot exact-match and a
+deterministic missing-evidence case) — see §8.
 
 ## 3. Retrieval Role in Workflow
 
@@ -297,6 +301,26 @@ Future standard:
 - The final chunk should record why it was selected or boosted.
 - Hybrid scoring must not hide missing required document types.
 
+Hybrid search should not be scoped as "add a lexical backend." It should be
+justified by golden queries where dense vector search alone is a poor fit —
+mostly exact-identifier lookups with low semantic content, for example:
+
+```yaml
+- id: exact_ndc_recall_identifier_retrieval
+  query: "What recall evidence applies to NDC 76045-001-20 lot 6400048?"
+
+- id: recall_number_lexical_match_low_semantic_query
+  query: "What happened in D-0277-2024?"
+```
+
+A hybrid search PR's acceptance criteria should include:
+
+- exact identifiers (recall number, NDC, lot) produce lexical candidates
+- dense and lexical candidates are merged without duplicates
+- selected chunks preserve `retrieval_source` (dense/lexical/both) alongside
+  existing `rank_reasons`
+- the golden exact-identifier cases above pass
+
 ### Reranking
 
 Current direction:
@@ -478,6 +502,47 @@ Suggested golden cases:
 - label update requiring warnings/contraindications
 - shortage requiring policy/SOP
 - ticket-scoped chat question asking for quarantine basis
+
+As of this writing, `scripts/rag/eval/golden_queries.yaml` covers 15 cases:
+recall exact (filter-pinned and router-coverage), label exact (filter-pinned
+and router-coverage), missing-evidence policy, fallback recall number,
+sodium chloride protected compound, shortage policy/SOP, Class II recall
+policy/SOP coverage, NDC exact match, lot exact match, missing-SOP-evidence
+insufficient, label boxed-warning-only, and unknown-event-type broad
+fallback. Ticket-scoped chat is not implemented yet, so that case is still
+open.
+
+Golden cases declare `context:` explicitly, separate from `expected:`:
+
+```yaml
+context:
+  event_type: recall
+  normalized_drug_name: fentanyl
+  recall_number: null
+  classification: class_i
+expected:
+  any_hit:
+    ...
+```
+
+`build_retrieval_context()` uses `context:` when present, falling back to
+deriving it from `expected.any_hit` (`context_from_expected()`) for entries
+that don't set it. New cases should always set `context:` explicitly.
+
+`expected.sufficiency` asserts against the RAG-internal `SufficiencyResult`
+(`evidence_status`, `min_coverage_score`, `max_coverage_score`,
+`missing_document_types`, `weak_document_types`, `citations_ready`) via
+`evaluate_sufficiency()`, separate from `any_hit`/`set` checks on raw hits.
+See `shortage_missing_sop_evidence_insufficient`, which pins a filter that
+excludes `sop` so `missing_document_types` is deterministic.
+
+Writing the NDC/lot exact-match cases surfaced a bug: `list_values()` in
+`app/rag/models.py` checked `isinstance(value, list)`, but pymilvus's
+`search()` returns Milvus `ARRAY` fields as a protobuf
+`RepeatedScalarContainer`, not a `list` — so the check silently missed it and
+the reranker's `ndc_match` boost never actually fired on live retrieval.
+Fixed by checking `Iterable` instead; see
+`test_list_values_unwraps_non_list_iterable_like_pymilvus_search_result`.
 
 ### DB / Milvus Smoke Tests
 

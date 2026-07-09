@@ -71,6 +71,34 @@ clinical pharmacology. Sections with placeholder-like content such as `None` or
 `has not been formally studied` are excluded from the body and recorded in
 `empty_sections` for traceability.
 
+#### Label document cap
+
+`fetch_labels.py` scores every candidate label record with
+`score_label_record()` and keeps only the top `--target-documents` (default
+`60`) across *all* drugs in `drugs.yaml`, ranked globally by score. Scoring is
+weighted toward clinically dense sections (`boxed_warning`, `warnings`,
+`contraindications`, `adverse_reactions`, `drug_interactions`, ...).
+
+This systematically drops simple, low-risk drugs whose labels have few of
+those sections, even when a matching raw record was already fetched. For
+example, `sodium chloride` (a protected-compound identity case; see
+`app/event/protected_compounds.json`) ranked 73rd of 75 qualifying label
+records and was silently excluded at the default cap of 60. `potassium
+chloride` was excluded entirely (no label saved at any cap below ~75).
+
+If you add a golden query or workflow test that depends on a specific
+low-complexity drug's label being in the corpus, check whether it is already
+present before assuming it needs a network fetch:
+
+```powershell
+# Free: rescoreds already-fetched raw JSON, no network/API calls.
+python -m scripts.rag.openfda.fetch_labels --from-raw --clean --target-documents 90
+```
+
+Raise `--target-documents` only as far as needed; a higher cap changes which
+records are selected for every drug, not just the one you care about, so
+re-run the golden query eval afterward to confirm nothing regressed.
+
 ### Recall Notice
 
 Recall notice documents are generated from the openFDA drug enforcement API.
@@ -292,6 +320,37 @@ Load embedded chunks into Milvus:
 ```powershell
 python -m scripts.rag.embedding.load_milvus --drop-existing
 ```
+
+### Full local corpus refresh
+
+Use this sequence any time golden queries or workflow tests need documents
+that are not yet in the local corpus (for example, after widening the label
+document cap — see "Label document cap" above). Steps 1 is free; steps 2 is
+free; step 3 calls the OpenAI embeddings API and costs money; step 4 rewrites
+the local Milvus collection.
+
+```powershell
+# 1. Rebuild markdown from already-fetched raw JSON (no network calls).
+python -m scripts.rag.openfda.fetch_labels --from-raw --clean --target-documents 90
+
+# 2. Rebuild chunk JSONL from the current markdown documents.
+python -m scripts.rag.chunking.build_chunks --clean
+
+# 3. Re-embed all chunks (OpenAI API calls; costs money).
+python -m scripts.rag.embedding.embed_chunks --clean
+
+# 4. Reload Milvus from scratch so stale/removed chunks don't linger.
+python -m scripts.rag.embedding.load_milvus --drop-existing
+
+# 5. Verify.
+python -m scripts.rag.eval.run_retrieval_eval
+pytest
+```
+
+Because `data/rag/` is gitignored, this refresh is local-only: it does not
+show up in `git status` and does not ship with a PR. Anyone else running the
+golden query eval (including CI, if it is ever wired up) needs to run this
+same sequence against their own Milvus instance.
 
 ## Generated Output Policy
 
