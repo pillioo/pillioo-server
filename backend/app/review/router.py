@@ -15,6 +15,9 @@ Endpoints:
     GET  /reports/{ticket_id}            → latest report version
 """
 
+from app.schemas.io import PendingApprovalItem
+from app.schemas.report import ReportVersion
+from app.schemas.workflow import AuditLogEntry
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -114,13 +117,10 @@ async def get_review_payload(
 
     return build_review_payload(state)
 
-@router.get("/approval/pending")
+@router.get("/approval/pending", response_model=list[PendingApprovalItem])
 async def get_pending_approvals(
     db: Session = Depends(get_db),
 ):
-    """
-    승인 대기 중인 티켓 목록 반환.
-    """
     pending = (
         db.query(Approval)
         .filter(Approval.status == ApprovalStatus.PENDING.value)
@@ -132,6 +132,11 @@ async def get_pending_approvals(
         {
             "ticket_id": a.ticket_id,
             "public_ticket_id": a.ticket.ticket_id if a.ticket else None,
+            "drug_name": a.ticket.drug_name if a.ticket else "",
+            "recall_number": a.ticket.recall_number if a.ticket else None,
+            "classification": a.ticket.classification if a.ticket else None,
+            "review_type": a.ticket.review_type if a.ticket else None,
+            "priority": a.ticket.priority if a.ticket else None,
             "approval_status": a.status,
             "created_at": a.created_at,
         }
@@ -235,7 +240,7 @@ async def revise_ticket(
 # Audit & Report
 # ──────────────────────────────────────────────
 
-@router.get("/audit/{ticket_id}")
+@router.get("/audit/{ticket_id}", response_model=list[AuditLogEntry])
 async def get_audit_log(
     ticket_id: str,
     db: Session = Depends(get_db),
@@ -256,7 +261,7 @@ async def get_audit_log(
     return trace
 
 
-@router.get("/reports/{ticket_id}/versions")
+@router.get("/reports/{ticket_id}/versions", response_model=list[ReportVersion])
 async def get_report_version_list(
     ticket_id: str,
     db: Session = Depends(get_db),
@@ -277,7 +282,7 @@ async def get_report_version_list(
     return versions
 
 
-@router.get("/reports/{ticket_id}")
+@router.get("/reports/{ticket_id}", response_model=ReportVersion)
 async def get_latest_report_version(
     ticket_id: str,
     db: Session = Depends(get_db),
