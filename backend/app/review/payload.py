@@ -122,7 +122,7 @@ def build_review_payload(state: TicketState) -> ReviewPayload:
             draft_text=state.draft_text or "",
             citations=state.draft_citations,
             evidence_coverage=sufficiency.coverage_score if sufficiency else 0.0,
-            inventory_confidence=inventory.confidence if inventory else 0.0,
+            inventory_confidence=inventory.match_confidence if inventory else 0.0,
         )
 
     else:

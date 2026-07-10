@@ -73,6 +73,9 @@ class FakeQuery:
         self.filters.extend(filters)
         return self
 
+    def order_by(self, *args):
+        return self
+
     def first(self):
         for obj in self.objects:
             if all(_matches_filter(obj, item) for item in self.filters):

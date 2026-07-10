@@ -12,16 +12,18 @@ All decisions are recorded in audit_logs.
 from sqlalchemy.orm import Session
 
 from app.db.models.approval_model import Approval
+from app.db.models.ticket import Ticket
 from app.event.safety import draft_safety_check
 from app.report.versioning import save_report_version
 from app.audit.logger import write_audit_log
-from app.schemas.common import ApprovalStatus, ReportVersionTag, WorkflowStep
+from app.schemas.common import ApprovalStatus, ReportVersionTag, TicketStatus, WorkflowStep
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
+from app.workflow.state import stage_for_status
 
 
 def handle_approve(
     db: Session,
-    ticket_id: int,
+    ticket: Ticket,
     public_ticket_id: str,
     request: ApproveRequest,
     current_draft: str,
@@ -32,11 +34,12 @@ def handle_approve(
     처리 내용:
         1. approvals 테이블에 승인 기록 저장
         2. final_v1 보고서 버전 저장
-        3. audit log 기록
+        3. ticket.status/workflow_stage를 APPROVED로 전환
+        4. audit log 기록
 
     Args:
         db: DB 세션
-        ticket_id: 승인할 티켓 ID
+        ticket: 승인할 티켓
         request: 승인 요청 (reviewer, comment)
         current_draft: 승인된 보고서 내용
 
@@ -55,35 +58,39 @@ def handle_approve(
 
     # 1. 승인 기록 저장
     approval = Approval(
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         reviewer=request.reviewer,
         status=ApprovalStatus.APPROVED.value,
         comment=request.comment,
     )
     db.add(approval)
-    db.flush() 
+    db.flush()
 
     # 2. final_v1 저장
     save_report_version(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         version_tag=ReportVersionTag.FINAL_V1,
         content=current_draft,
         created_by=request.reviewer,
     )
 
-    # 3. audit log 기록
+    # 3. 티켓 상태를 승인 완료로 전환
+    ticket.status = TicketStatus.APPROVED.value
+    ticket.workflow_stage = stage_for_status(TicketStatus.APPROVED).value
+
+    # 4. audit log 기록
     duration_ms = int((time.time() - start) * 1000)
     write_audit_log(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         step_name=WorkflowStep.APPROVAL_DECISION,
         input_json={"reviewer": request.reviewer, "decision": "approve"},
         output_json={"approval_status": "approved", "version": "final_v1"},
         duration_ms=duration_ms,
     )
     db.commit()
-    
+
     return {
         "ticket_id": public_ticket_id,
         "approval_status": ApprovalStatus.APPROVED.value,
@@ -93,7 +100,7 @@ def handle_approve(
 
 def handle_reject(
     db: Session,
-    ticket_id: int,
+    ticket: Ticket,
     public_ticket_id: str,
     request: RejectRequest,
 ) -> dict:
@@ -102,11 +109,12 @@ def handle_reject(
 
     처리 내용:
         1. approvals 테이블에 반려 기록 저장
-        2. audit log 기록
+        2. ticket.status/workflow_stage를 REJECTED로 전환
+        3. audit log 기록
 
     Args:
         db: DB 세션
-        ticket_id: 반려할 티켓 ID
+        ticket: 반려할 티켓
         request: 반려 요청 (reviewer, comment 필수)
 
     Returns:
@@ -124,7 +132,7 @@ def handle_reject(
 
     # 1. 반려 기록 저장
     approval = Approval(
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         reviewer=request.reviewer,
         status=ApprovalStatus.REJECTED.value,
         comment=request.comment,
@@ -132,11 +140,15 @@ def handle_reject(
     db.add(approval)
     db.flush()
 
-    # 2. audit log 기록
+    # 2. 티켓 상태를 반려로 전환
+    ticket.status = TicketStatus.REJECTED.value
+    ticket.workflow_stage = stage_for_status(TicketStatus.REJECTED).value
+
+    # 3. audit log 기록
     duration_ms = int((time.time() - start) * 1000)
     write_audit_log(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         step_name=WorkflowStep.APPROVAL_DECISION,
         input_json={"reviewer": request.reviewer, "decision": "reject"},
         output_json={"approval_status": "rejected", "comment": request.comment},

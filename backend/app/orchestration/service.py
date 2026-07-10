@@ -26,7 +26,7 @@ from app.schemas.common import TicketStatus, WorkflowStep
 from app.schemas.event import EventNormalized
 from app.schemas.evidence import DraftCitation, EvidenceResult
 from app.schemas.workflow import TicketState, TrustChecks
-from app.workflow.state import WorkflowStage
+from app.workflow.state import WorkflowStage, can_rerun_workflow
 
 
 class EvidenceRetrievalService(Protocol):
@@ -103,12 +103,9 @@ def run_ticket_workflow(
 
     # CREATED means the ticket was persisted but the workflow never ran yet
     # (e.g. via /events/upload) — treat it like a fresh run, not "already done".
-    already_processed = not created and ticket.status not in (
-        TicketStatus.CREATED.value,
-        TicketStatus.WORKFLOW_FAILED.value,
-    )
+    already_processed = not created and not can_rerun_workflow(ticket.status)
     if already_processed:
-        return OrchestrationResult(ticket=ticket, state=ticket_to_state(ticket), created=False)
+        return OrchestrationResult(ticket=ticket, state=ticket_to_state(db, ticket), created=False)
 
     if not created and ticket.status == TicketStatus.WORKFLOW_FAILED.value:
         reset_failed_ticket_for_retry(ticket)

@@ -5,9 +5,10 @@ from datetime import datetime, timezone
 from app.db.models.approval_model import Approval
 from app.db.models.audit_log_model import AuditLog
 from app.db.models.report_version_model import ReportVersion
+from app.db.models.ticket import Ticket
 from app.report.versioning import save_report_version
 from app.review.approval import handle_approve
-from app.schemas.common import ReportVersionTag
+from app.schemas.common import ReportVersionTag, TicketStatus
 from app.schemas.review import ApproveRequest
 
 
@@ -55,10 +56,11 @@ def test_save_report_version_uses_report_text_and_integer_ticket_fk() -> None:
 
 def test_handle_approve_persists_integer_fk_and_returns_public_ticket_id() -> None:
     db = FakeSession()
+    ticket = Ticket(id=42, ticket_id="T-PUBLIC", status=TicketStatus.REVIEW_ROUTED.value)
 
     result = handle_approve(
         db=db,
-        ticket_id=42,
+        ticket=ticket,
         public_ticket_id="T-PUBLIC",
         request=ApproveRequest(reviewer="pharm-1", comment="ok"),
         current_draft="Final body",
@@ -74,3 +76,4 @@ def test_handle_approve_persists_integer_fk_and_returns_public_ticket_id() -> No
     assert version.report_text == "Final body"
     assert result["ticket_id"] == "T-PUBLIC"
     assert db.committed is True
+    assert ticket.status == TicketStatus.APPROVED.value
