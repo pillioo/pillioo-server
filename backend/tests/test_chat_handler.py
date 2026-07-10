@@ -269,7 +269,30 @@ def test_get_session_messages_scoped_by_session_not_ticket(db_session):
     session_a = get_or_create_session(db_session, ticket.id, session_id=None)
     db_session.commit()
 
-    from app.chat.handler import save_message
+    from app.chat.handler import save_message, get_session_messages
 
     save_message(db_session, ticket.id, session_a.session_id, "user", "hello from session a")
     db_session.commit()
+
+    session_b = get_or_create_session(db_session, ticket.id, session_id=None)
+    # get_or_create_session reuses existing session when session_id is None,
+    # so create a second session manually to test scoping.
+    from app.db.models.chat_model import ChatSession
+    import uuid
+    session_b = ChatSession(
+        session_id=str(uuid.uuid4()),
+        ticket_id=ticket.id,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(session_b)
+    db_session.flush()
+    save_message(db_session, ticket.id, session_b.session_id, "user", "hello from session b")
+    db_session.commit()
+
+    messages_a = get_session_messages(db_session, session_a.session_id)
+    messages_b = get_session_messages(db_session, session_b.session_id)
+
+    assert len(messages_a) == 1
+    assert messages_a[0].content == "hello from session a"
+    assert len(messages_b) == 1
+    assert messages_b[0].content == "hello from session b"
