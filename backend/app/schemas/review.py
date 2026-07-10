@@ -102,5 +102,22 @@ class RejectRequest(BaseModel):
 
 
 class ReviseRequest(BaseModel):
+    """Pharmacist edited the draft directly -- persisted as-is (no LLM call).
+    See SystemReviseRequest for the system-revises-on-the-pharmacist's-behalf
+    path."""
+
     reviewer: str
     revised_draft: str = Field(..., min_length=1)
+    comment: Optional[str] = Field(
+        None, description="Optional note on what changed and why, stored as reviewer_comment."
+    )
+
+
+class SystemReviseRequest(BaseModel):
+    """System revises the latest draft on the pharmacist's behalf, driven by
+    reviewer feedback or a flagged safety issue. Requires the latest report
+    version to have a structured body (report_json); a bounded LLM edit is
+    applied via LLMDraftReviser rather than a full rewrite."""
+
+    reviewer: str
+    reviewer_comment: str = Field(..., min_length=1)

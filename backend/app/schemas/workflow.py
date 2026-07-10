@@ -18,6 +18,7 @@ from app.schemas.common import (
 from app.schemas.event import EventNormalized, SafetyCheckResult
 from app.schemas.evidence import DraftCitation, EvidenceResult, SufficiencyCheckResult
 from app.schemas.inventory import ImpactSummary, InventoryMatchResult, TrustCheckResult
+from app.schemas.report import DraftReport
 
 
 class TrustChecks(BaseModel):
@@ -78,6 +79,14 @@ class TicketState(BaseModel):
     evidence_result: Optional[EvidenceResult] = None
     sufficiency_check: Optional[SufficiencyCheckResult] = None
 
+    # Structured draft_v1/draft_v2 content (see app.schemas.report.DraftReport).
+    # Only populated in-memory during a workflow run that generated a fresh
+    # draft; reconstructing TicketState from a persisted Ticket row (e.g. in
+    # app.orchestration.state.ticket_to_state) leaves this as None since the
+    # structured body lives on the ReportVersion row, not on Ticket itself.
+    draft_report: Optional[DraftReport] = None
+    # Derived, flattened text kept for backward compatibility with existing
+    # consumers (chat prompt context, draft_safety_check, review payloads).
     draft_text: Optional[str] = None
     draft_citations: list[DraftCitation] = Field(default_factory=list)
 

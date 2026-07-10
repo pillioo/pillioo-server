@@ -175,12 +175,18 @@ def run_draft_step(
     draft_generator,
 ) -> TicketState:
     started = time.perf_counter()
-    draft_text, draft_citations = draft_generator.generate(
+    report = draft_generator.generate(
         state=state,
         evidence_result=state.evidence_result or EvidenceResult(),
     )
+    # draft_text/draft_citations stay as a derived, flattened view of the
+    # structured report so existing consumers (chat prompt context,
+    # draft_safety_check, review payloads) don't need to change.
+    draft_text = report.to_display_text()
+    draft_citations = report.citations
     updated = state.model_copy(
         update={
+            "draft_report": report,
             "draft_text": draft_text,
             "draft_citations": draft_citations,
             "status": TicketStatus.DRAFT_GENERATED,
@@ -190,13 +196,15 @@ def run_draft_step(
 
     ticket.draft_text = draft_text
     ticket.draft_citations = [citation.model_dump(mode="json") for citation in draft_citations]
-    # Keep ticket.draft_text for workflow state access, and persist draft_v1
-    # so the existing approval/report flow can read the generated draft.
+    # Persist draft_v1 as a structured report (report_json) so the follow-up
+    # review/approval flow, versioning, and any future frontend can consume
+    # the structured body -- report_text is still derived for plain-text
+    # consumers of the existing approval/report flow.
     save_report_version(
         db=db,
         ticket_id=ticket.id,
         version_tag=ReportVersionTag.DRAFT_V1,
-        content=draft_text,
+        report=report,
         created_by="workflow",
     )
     ticket.status = TicketStatus.DRAFT_GENERATED.value

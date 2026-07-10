@@ -124,10 +124,12 @@ class FakeOpenAIClient:
 def _draft_response_provider(kwargs: dict) -> str:
     return json.dumps(
         {
-            "draft_text": (
+            "title": "Midazolam class I recall review draft",
+            "summary": (
                 "Midazolam class I recall notice. Quarantine affected lots pending "
                 "pharmacist review per SOP section 4.2."
             ),
+            "recommended_review_action": "Pharmacist review required before further action.",
             "citations": [
                 {
                     "source": "sop.md",
@@ -177,7 +179,9 @@ def client(monkeypatch):
     # LLMDraftGenerator() is constructed with no args as run_ticket_workflow's
     # default; patch OpenAI at its import site so it never touches the network.
     monkeypatch.setattr(
-        orchestration_draft_module, "OpenAI", lambda: FakeOpenAIClient(_draft_response_provider)
+        orchestration_draft_module,
+        "OpenAI",
+        lambda **kwargs: FakeOpenAIClient(_draft_response_provider),
     )
 
     app.dependency_overrides[chat_router_module.get_retrieval_service] = lambda: fake_evidence_service
@@ -274,3 +278,44 @@ def test_chat_explicit_session_id_still_works(client: TestClient) -> None:
     )
     assert second.status_code == 200, second.text
     assert second.json()["session_id"] == session_id
+
+
+def test_upload_run_approve_freezes_structured_final_v1(client: TestClient) -> None:
+    """Full chain: upload -> run (draft_v1 as a structured DraftReport) ->
+    approve (final_v1 frozen from draft_v1, no LLM regeneration). Closes the
+    gap where draft_v1 generation and the approval/versioning flow were only
+    ever tested separately, never chained end-to-end."""
+    ticket_id = _upload_and_run(client, recall_number="D-TEST-2026-004")
+
+    versions_resp = client.get(f"/reports/{ticket_id}/versions")
+    assert versions_resp.status_code == 200, versions_resp.text
+    versions = versions_resp.json()
+    assert len(versions) == 1
+    draft_v1 = versions[0]
+    assert draft_v1["version_tag"] == "draft_v1"
+    assert draft_v1["report"] is not None
+    assert draft_v1["report"]["title"] == "Midazolam class I recall review draft"
+    assert draft_v1["report"]["affected_product"]["drug_name"] == "midazolam"
+    assert draft_v1["created_by"] == "workflow"
+
+    approve_resp = client.post(
+        f"/approval/{ticket_id}/approve",
+        json={"reviewer": "pharm-1", "comment": "Looks good."},
+    )
+    assert approve_resp.status_code == 200, approve_resp.text
+    approve_body = approve_resp.json()
+    assert approve_body["approval_status"] == "approved"
+    assert approve_body["final_report_version"] == "final_v1"
+
+    versions_after = client.get(f"/reports/{ticket_id}/versions").json()
+    assert len(versions_after) == 2
+    final_v1 = next(v for v in versions_after if v["version_tag"] == "final_v1")
+
+    # final_v1 must be a byte-for-byte freeze of draft_v1 -- same structured
+    # report and same flattened text, no LLM regeneration involved.
+    assert final_v1["report"] == draft_v1["report"]
+    assert final_v1["report_text"] == draft_v1["report_text"]
+    assert final_v1["source_version"] == "draft_v1"
+    assert final_v1["approved_by"] == "pharm-1"
+    assert final_v1["approval_comment"] == "Looks good."
+    assert final_v1["approved_at"] is not None

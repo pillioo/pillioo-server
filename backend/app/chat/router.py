@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.chat.handler import get_chat_history, handle_chat
 from app.core.config import settings
+from app.core.llm_client import build_llm_client
 from app.db.session import get_db
 from app.rag.service import RetrievalService
 from app.schemas.chat import ChatMessage as ChatMessageSchema
@@ -33,7 +34,7 @@ def get_retrieval_service() -> RetrievalService:
 
 
 def get_llm_client() -> OpenAI:
-    return OpenAI()
+    return build_llm_client()
 
 
 # ----------------------------------------------
@@ -49,18 +50,18 @@ def submit_chat_query(
     llm_client: OpenAI = Depends(get_llm_client),
 ) -> ChatResponse:
     """
-    약사가 특정 티켓에 대해 근거 문서를 질의.
+    Pharmacist queries evidence documents for a specific ticket.
 
-    - session_id 없으면 이 ticket의 기존 세션을 재사용 (없으면 새로 생성)
-    - RetrievalService로 관련 evidence 검색 (recall_number_is_fallback 반영)
-    - evidence가 있으면 LLM이 세션 히스토리 + ticket 상태 요약 + evidence로 답변 생성
-    - evidence가 없으면 고정 fallback 메시지 반환
-    - user/assistant 메시지 chat_messages 테이블에 저장
+    - If session_id is absent, reuse this ticket's existing session (create one if none exists).
+    - Search relevant evidence via RetrievalService (honors recall_number_is_fallback).
+    - If evidence was found, the LLM answers using session history + ticket state summary + evidence.
+    - If no evidence was found, return the fixed fallback message.
+    - Save the user/assistant messages to chat_messages.
 
-    예시 요청:
+    Example request:
         POST /chat/T-001
         {
-            "user_query": "격리 절차 근거 보여줘",
+            "user_query": "Show me the evidence for the quarantine procedure",
             "session_id": null
         }
     """
@@ -82,8 +83,9 @@ def get_ticket_chat_history(
     db: Session = Depends(get_db),
 ) -> list[ChatMessageSchema]:
     """
-    특정 티켓의 전체 채팅 기록 반환 (시간순).
-    ticket당 세션이 하나이므로 이는 그 세션의 전체 기록과 같다.
+    Return the full chat history for a ticket (chronological order).
+    Since there is one session per ticket, this is equivalent to that
+    session's full history.
     """
     return get_chat_history(
         db=db,

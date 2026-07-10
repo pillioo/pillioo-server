@@ -57,13 +57,19 @@ def test_save_report_version_uses_report_text_and_integer_ticket_fk() -> None:
 def test_handle_approve_persists_integer_fk_and_returns_public_ticket_id() -> None:
     db = FakeSession()
     ticket = Ticket(id=42, ticket_id="T-PUBLIC", status=TicketStatus.REVIEW_ROUTED.value)
+    source_version = ReportVersion(
+        ticket_id=42,
+        version_tag=ReportVersionTag.DRAFT_V1.value,
+        report_text="Final body",
+        report_json=None,
+    )
 
     result = handle_approve(
         db=db,
         ticket=ticket,
         public_ticket_id="T-PUBLIC",
         request=ApproveRequest(reviewer="pharm-1", comment="ok"),
-        current_draft="Final body",
+        source_version=source_version,
     )
 
     approval = next(obj for obj in db.objects if isinstance(obj, Approval))

@@ -14,10 +14,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.llm_client import build_llm_client
 from app.db.models.chat_model import ChatSession, ChatMessage
 from app.orchestration.retrieval_identity import resolve_retrieval_drug_name
 from app.orchestration.state import ticket_to_state
@@ -52,9 +52,9 @@ def get_or_create_session(
     session_id: str | None,
 ) -> ChatSession:
     """
-    session_id가 주어지면 해당 세션을 조회 (없으면 404).
-    session_id가 없으면 이 ticket의 기존 세션을 재사용하고,
-    아직 세션이 없을 때만 새로 생성한다 (ticket당 세션 1개).
+    session_id given: look up that session (404 if missing).
+    session_id absent: reuse this ticket's existing session, creating one
+    only if none exists yet (one session per ticket).
     """
     if session_id:
         session = db.query(ChatSession).filter(
@@ -97,7 +97,7 @@ def save_message(
     retrieved_sources: list[dict] | None = None,
 ) -> ChatMessage:
     """
-    chat_messages 테이블에 메시지 저장.
+    Persist a message into chat_messages.
     """
     message = ChatMessage(
         ticket_id=ticket_id,
@@ -190,25 +190,28 @@ def handle_chat(
     llm_client: object | None = None,
 ) -> dict:
     """
-    약사 채팅 질의 처리.
+    Handle a pharmacist chat query.
 
-    1. ticket 조회 -> TicketState 변환
-    2. 세션 생성 또는 기존 세션 재사용 (ticket당 세션 1개)
-    3. user 메시지 저장
-    4. RetrievalService.retrieve() 호출 (recall_number_is_fallback 반영)
-    5. 검색 결과 + 세션 히스토리 + ticket state 요약을 컨텍스트로 LLM 호출
-       (evidence가 하나도 없으면 LLM을 부르지 않고 기존 fallback 메시지 유지)
-    6. assistant 메시지 저장
-    7. 응답 반환
+    1. Look up ticket -> build TicketState
+    2. Create or reuse the ticket's chat session (one session per ticket)
+    3. Save the user message
+    4. Call RetrievalService.retrieve() (honors recall_number_is_fallback)
+    5. Call the LLM with retrieved evidence + session history + ticket state
+       summary (if no evidence at all, skip the LLM and keep the existing
+       fallback message)
+    6. Save the assistant message
+    7. Return the response
 
     Args:
-        db: DB 세션
-        public_ticket_id: 공개 티켓 ID (e.g. "T-XXXX")
-        user_query: 약사 질문
-        session_id: 기존 세션 ID (없으면 ticket의 기존 세션을 재사용하거나 새로 생성)
-        retrieval_service: RAG RetrievalService 인스턴스
-        top_k: 검색 결과 수
-        llm_client: OpenAI 호환 클라이언트 (테스트에서 주입 가능; 기본은 OpenAI())
+        db: DB session
+        public_ticket_id: public ticket id (e.g. "T-XXXX")
+        user_query: pharmacist's question
+        session_id: existing session id (if absent, reuse or create the
+            ticket's session)
+        retrieval_service: RAG RetrievalService instance
+        top_k: number of retrieval results
+        llm_client: OpenAI-compatible client (injectable in tests; defaults
+            to build_llm_client())
 
     Returns:
         dict: session_id, answer, sources
@@ -262,7 +265,7 @@ def handle_chat(
             "source": chunk.source_path,
             "section": chunk.section,
             "score": round(chunk.score, 4),
-            "content": chunk.content[:300],  # 미리보기 300자
+            "content": chunk.content[:300],
         }
         for chunk in evidence_result.chunks[:top_k]
     ]
@@ -272,7 +275,7 @@ def handle_chat(
         state_summary = build_ticket_state_summary(state)
         chat_history_text = build_chat_history_context(history_messages)
 
-        client = llm_client or OpenAI()
+        client = llm_client or build_llm_client()
         try:
             completion = client.chat.completions.create(
                 model=settings.LLM_MODEL,
@@ -293,7 +296,7 @@ def handle_chat(
             answer = completion.choices[0].message.content
             # Validate that the LLM response is not None or empty/whitespace-only
             if not answer or not answer.strip():
-                answer = "죄송합니다. 응답을 생성하지 못했습니다."
+                answer = "Sorry, a response could not be generated."
         except Exception:
             db.rollback()
             raise_review_error(
@@ -328,8 +331,9 @@ def get_chat_history(
     public_ticket_id: str,
 ) -> list[dict]:
     """
-    특정 티켓의 전체 채팅 기록 반환 (시간순).
-    ticket당 세션이 하나이므로 ticket_id 기준 조회는 곧 그 세션의 전체 기록과 같다.
+    Return the full chat history for a ticket (chronological order).
+    Since there is one session per ticket, filtering by ticket_id is
+    equivalent to returning that session's full history.
     """
     ticket = get_ticket_by_public_id(db, public_ticket_id)
 
