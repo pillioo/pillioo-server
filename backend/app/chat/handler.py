@@ -291,6 +291,9 @@ def handle_chat(
                 temperature=0,
             )
             answer = completion.choices[0].message.content
+            # Validate that the LLM response is not None or empty/whitespace-only
+            if not answer or not answer.strip():
+                answer = "죄송합니다. 응답을 생성하지 못했습니다."
         except Exception:
             db.rollback()
             raise_review_error(

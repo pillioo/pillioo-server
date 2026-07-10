@@ -30,7 +30,7 @@ import app.db.models.ticket  # noqa: F401
 
 import app.chat.router as chat_router_module
 import app.orchestration.router as orchestration_router_module
-import app.orchestration.service as orchestration_service_module
+import app.orchestration.draft as orchestration_draft_module
 from app.main import app
 from app.rag.models import (
     EvidenceChunk as RagEvidenceChunk,
@@ -177,7 +177,7 @@ def client(monkeypatch):
     # LLMDraftGenerator() is constructed with no args as run_ticket_workflow's
     # default; patch OpenAI at its import site so it never touches the network.
     monkeypatch.setattr(
-        orchestration_service_module, "OpenAI", lambda: FakeOpenAIClient(_draft_response_provider)
+        orchestration_draft_module, "OpenAI", lambda: FakeOpenAIClient(_draft_response_provider)
     )
 
     app.dependency_overrides[chat_router_module.get_retrieval_service] = lambda: fake_evidence_service
