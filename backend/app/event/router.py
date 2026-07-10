@@ -6,13 +6,15 @@ Handles recall event upload and triggers normalization + dedup + ticket creation
 """
 import hashlib
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
 from app.event.normalizer import normalize_event
 from app.schemas.io import EventUploadRequest, EventUploadResponse
 
 from app.event.dedup import check_and_save_event, release_event
-from app.event.ticket_creator import create_ticket
+from app.orchestration.tickets import get_or_create_ticket_record
 from app.event.collector import periodic_collect
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -25,7 +27,10 @@ def generate_fallback_id(data: dict) -> str:
     return f"FALLBACK-{hash_val}"
 
 @router.post("/upload", response_model=EventUploadResponse)
-async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
+async def upload_event(
+    payload: EventUploadRequest,
+    db: Session = Depends(get_db),
+) -> EventUploadResponse:
     """
     샘플 recall 이벤트 JSON을 받아서 정규화, 중복 체크 후 티켓 생성.
     """
@@ -60,11 +65,13 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
                 }
             )
 
-        # 3. 티켓 생성 — 실패 시 원자성을 위해 release_event로 롤백
+        # 3. 티켓 생성 — Postgres에 영속화 (실패 시 원자성을 위해 rollback + release_event)
         try:
-            # 피드백 반영: ticket 객체 전체를 반환받습니다.
-            ticket = create_ticket(event)
+            # orchestration 파이프라인과 동일하게 실제 DB에 upsert 합니다.
+            ticket, _created = get_or_create_ticket_record(db, event)
+            db.commit()
         except Exception as e:
+            db.rollback()
             release_event(event.event_id) # 중복 저장했던 기록 취소
             raise HTTPException(
                 status_code=500,
@@ -86,7 +93,7 @@ async def upload_event(payload: EventUploadRequest) -> EventUploadResponse:
 
 
 @router.post("/collect", summary="openFDA 이벤트 수동 수집")
-async def trigger_openfda_collection():
+async def trigger_openfda_collection(db: Session = Depends(get_db)):
     """
     팀원 피드백 반영: 스케줄러 대신 사용자가 명시적으로 호출하는 수동 트리거 엔드포인트.
     프론트엔드에서 'openFDA 수집 실행' 버튼 클릭 시 이 API를 호출합니다.
@@ -116,9 +123,12 @@ async def trigger_openfda_collection():
             dedup_result = check_and_save_event(event.event_id)
             if not dedup_result.duplicated:
                 try:
-                    create_ticket(event)
-                    processed_summary["recalls"]["tickets_created"] += 1
+                    _ticket, created = get_or_create_ticket_record(db, event)
+                    db.commit()
+                    if created:
+                        processed_summary["recalls"]["tickets_created"] += 1
                 except Exception as e:
+                    db.rollback()
                     print(f"[Router] 티켓 생성 실패, 롤백합니다: {event.event_id}, error={e}")
                     release_event(event.event_id) # 티켓 발행 실패 시 롤백
         except Exception as e:
