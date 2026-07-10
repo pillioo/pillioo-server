@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.schemas.common import ReportVersionTag
+
+
 
 
 class ReportVersion(BaseModel):
