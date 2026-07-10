@@ -8,12 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.db.models.ticket import Ticket
 from app.orchestration.steps import (
+    evidence_gate_allows_draft,
     run_draft_step,
+    run_evidence_gate_step,
     run_evidence_step,
     run_inventory_step,
     run_policy_aggregation_step,
     run_safety_step,
     run_workflow_step,
+    write_skipped_workflow_step,
 )
 from app.orchestration.tickets import create_ticket_record, get_or_create_ticket_record
 from app.orchestration.state import ticket_to_state
@@ -98,7 +101,13 @@ def run_ticket_workflow(
     ticket, created = get_or_create_ticket_record(db, event)
     state = build_initial_state(ticket, event)
 
-    if not created and ticket.status != TicketStatus.WORKFLOW_FAILED.value:
+    # CREATED means the ticket was persisted but the workflow never ran yet
+    # (e.g. via /events/upload) — treat it like a fresh run, not "already done".
+    already_processed = not created and ticket.status not in (
+        TicketStatus.CREATED.value,
+        TicketStatus.WORKFLOW_FAILED.value,
+    )
+    if already_processed:
         return OrchestrationResult(ticket=ticket, state=ticket_to_state(ticket), created=False)
 
     if not created and ticket.status == TicketStatus.WORKFLOW_FAILED.value:
@@ -120,15 +129,37 @@ def run_ticket_workflow(
     state = run_workflow_step(
         db=db,
         ticket=ticket,
-        step_name=WorkflowStep.DRAFT_GENERATION,
-        func=lambda: run_draft_step(db, ticket, state, draft_generator=draft_generator or SimpleDraftGenerator()),
+        step_name=WorkflowStep.SUFFICIENCY_CHECK,
+        func=lambda: run_evidence_gate_step(db, ticket, state),
     )
-    state = run_workflow_step(
-        db=db,
-        ticket=ticket,
-        step_name=WorkflowStep.SAFETY_CHECK,
-        func=lambda: run_safety_step(db, ticket, state),
-    )
+    if evidence_gate_allows_draft(state):
+        state = run_workflow_step(
+            db=db,
+            ticket=ticket,
+            step_name=WorkflowStep.DRAFT_GENERATION,
+            func=lambda: run_draft_step(db, ticket, state, draft_generator=draft_generator or SimpleDraftGenerator()),
+        )
+        state = run_workflow_step(
+            db=db,
+            ticket=ticket,
+            step_name=WorkflowStep.SAFETY_CHECK,
+            func=lambda: run_safety_step(db, ticket, state),
+        )
+    else:
+        write_skipped_workflow_step(
+            db=db,
+            ticket=ticket,
+            step_name=WorkflowStep.DRAFT_GENERATION,
+            reason="insufficient_evidence",
+            input_json={"evidence_status": state.sufficiency_check.evidence_status.value if state.sufficiency_check else None},
+        )
+        write_skipped_workflow_step(
+            db=db,
+            ticket=ticket,
+            step_name=WorkflowStep.SAFETY_CHECK,
+            reason="draft_generation_skipped",
+            input_json={"draft_text_present": bool(state.draft_text)},
+        )
     state = run_workflow_step(
         db=db,
         ticket=ticket,

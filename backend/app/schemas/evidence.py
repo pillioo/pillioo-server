@@ -44,6 +44,7 @@ class SufficiencyCheckResult(BaseModel):
     # Sources that were found but only via a loose, non-section-specific match —
     # present, but not confidently relevant. Still counts as a gap for status purposes.
     weak_sources: list[DocumentType] = Field(default_factory=list)
+    failure_reasons: list[dict] = Field(default_factory=list)
     coverage_score: float = Field(..., ge=0.0, le=1.0)
     evidence_status: EvidenceStatus
     needs_evidence_review: bool
@@ -52,18 +53,39 @@ class SufficiencyCheckResult(BaseModel):
     @model_validator(mode="after")
     def check_status_matches_missing(self) -> "SufficiencyCheckResult":
         has_gap = bool(self.missing_sources) or bool(self.weak_sources)
+        has_non_source_failure = bool(self.failure_reasons) or not self.citations_ready
 
         if has_gap and self.evidence_status != EvidenceStatus.INSUFFICIENT:
             raise ValueError(
                 "evidence_status must be insufficient when missing_sources or weak_sources is not empty."
             )
 
-        if not has_gap and self.evidence_status != EvidenceStatus.SUFFICIENT:
+        if not has_gap and not has_non_source_failure and self.evidence_status != EvidenceStatus.SUFFICIENT:
             raise ValueError(
                 "evidence_status must be sufficient when missing_sources and weak_sources are empty."
             )
 
-        if has_gap != self.needs_evidence_review:
+        if has_non_source_failure and self.evidence_status != EvidenceStatus.INSUFFICIENT:
+            raise ValueError(
+                "evidence_status must be insufficient when citations are not ready or failure_reasons is not empty."
+            )
+
+        if has_non_source_failure and not self.needs_evidence_review:
+            raise ValueError(
+                "needs_evidence_review must be true when citations are not ready or failure_reasons is not empty."
+            )
+
+        if self.evidence_status == EvidenceStatus.INSUFFICIENT and not self.needs_evidence_review:
+            raise ValueError(
+                "needs_evidence_review must match whether missing_sources or weak_sources is non-empty."
+            )
+
+        if has_gap and not self.needs_evidence_review:
+            raise ValueError(
+                "needs_evidence_review must match whether missing_sources or weak_sources is non-empty."
+            )
+
+        if not has_gap and not has_non_source_failure and self.needs_evidence_review:
             raise ValueError(
                 "needs_evidence_review must match whether missing_sources or weak_sources is non-empty."
             )

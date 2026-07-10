@@ -26,6 +26,7 @@ def get_or_create_ticket_record(db: Session, event: EventNormalized) -> tuple[Ti
         lot=event.lot,
         classification=event.classification.value if event.classification else None,
         recall_number=event.recall_number,
+        recall_number_is_fallback=event.recall_number_is_fallback,
         reason_for_recall=event.reason_for_recall,
         product_description=event.product_description,
         openfda_id=event.event_id,

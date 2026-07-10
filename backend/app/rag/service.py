@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from openai import OpenAI
 
@@ -86,10 +87,57 @@ class RetrievalService:
         reranked = self.reranker.rerank(deduped, context=retrieval_context, plan=plan)
         evidence_set = self.set_builder.build(reranked, plan=plan, top_k=top_k)
         sufficiency = self.sufficiency_checker.check(evidence_set, plan=plan)
+        retrieval_trace = build_retrieval_trace(
+            plan=plan,
+            candidates=candidates,
+            deduped=deduped,
+            reranked=reranked,
+            evidence_set=evidence_set,
+            filter_attempts=getattr(self.candidate_retriever, "last_filter_attempts", []),
+        )
         return EvidenceResult(
             query=query,
             context=retrieval_context,
             plan=plan,
             chunks=evidence_set,
             sufficiency=sufficiency,
+            retrieval_trace=retrieval_trace,
         )
+
+
+def build_retrieval_trace(
+    *,
+    plan,
+    candidates,
+    deduped,
+    reranked,
+    evidence_set,
+    filter_attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "targets": [target.to_dict() for target in plan.targets],
+        "filter_attempts": filter_attempts,
+        "counts": {
+            "candidate_chunks": len(candidates),
+            "deduped_chunks": len(deduped),
+            "reranked_chunks": len(reranked),
+            "selected_chunks": len(evidence_set),
+        },
+        "selected_chunks": [
+            {
+                "chunk_id": chunk.chunk_id,
+                "document_type": chunk.document_type,
+                "section": chunk.section,
+                "source_path": chunk.source_path,
+                "score": chunk.score,
+                "rank_score": chunk.rank_score,
+                "rank_reasons": chunk.rank_reasons,
+                "matched_identifiers": chunk.matched_identifiers,
+                "filter_level": chunk.filter_level,
+                "target_document_type": chunk.target_document_type,
+            }
+            for chunk in evidence_set
+        ],
+        "filter_levels": sorted({chunk.filter_level for chunk in evidence_set if chunk.filter_level}),
+        "rank_reasons": sorted({reason for chunk in evidence_set for reason in chunk.rank_reasons}),
+    }

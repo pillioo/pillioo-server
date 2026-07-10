@@ -58,6 +58,14 @@ def test_to_schema_chunk_and_citation_clamp_negative_score() -> None:
     assert citation.score == 0.0
 
 
+def test_to_schema_chunk_and_citation_clamp_score_above_one() -> None:
+    schema_chunk = to_schema_chunk(chunk(score=1.4))
+    citation = to_citation(chunk(score=1.4))
+
+    assert schema_chunk.similarity_score == 1.0
+    assert citation.score == 1.0
+
+
 def test_to_evidence_result_maps_chunks_to_top_chunks_and_citations() -> None:
     result = EvidenceResult(
         query="q",
@@ -88,6 +96,21 @@ def test_to_sufficiency_check_result_keeps_weak_sources_separate_from_missing() 
     assert result.weak_sources == ["policy"]
     assert result.evidence_status == "insufficient"
     assert result.needs_evidence_review is True
+
+
+def test_to_sufficiency_check_result_maps_failure_reasons() -> None:
+    result = to_sufficiency_check_result(
+        sufficiency(
+            evidence_status="insufficient",
+            needs_evidence_review=True,
+            citations_ready=False,
+            failure_reasons=[{"reason": "citation_not_ready"}],
+        )
+    )
+
+    assert result.failure_reasons == [{"reason": "citation_not_ready"}]
+    assert result.citations_ready is False
+    assert result.evidence_status == "insufficient"
 
 
 def test_to_ticket_state_fields_returns_matching_pair() -> None:

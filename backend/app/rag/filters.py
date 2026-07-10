@@ -32,12 +32,14 @@ class MetadataFilterBuilder:
             strong.append(f"{MilvusField.RXNORM_RXCUI} == {self._string_literal(context.rxnorm_rxcui)}")
         elif context.normalized_drug_name and target.document_type in {"label", "recall_notice"}:
             strong.append(f"{MilvusField.NORMALIZED_DRUG_NAME} == {self._string_literal(context.normalized_drug_name)}")
-        if len(strong) > len(base):
-            levels.append(FilterCandidate(" and ".join(strong), "strong_identifier"))
-
         section_level = [*base]
         if target.sections:
             section_level.append(self._section_expr(target.sections))
+
+        if len(strong) > len(base) and len(section_level) > len(base):
+            levels.append(FilterCandidate(" and ".join([*strong, self._section_expr(target.sections)]), "strong_identifier_section"))
+        if len(strong) > len(base):
+            levels.append(FilterCandidate(" and ".join(strong), "strong_identifier"))
         if len(section_level) > len(base):
             levels.append(FilterCandidate(" and ".join(section_level), "section"))
 

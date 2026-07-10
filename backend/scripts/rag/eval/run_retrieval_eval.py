@@ -25,6 +25,7 @@ class GoldenQuery:
     query: str
     top_k: int
     filter: str
+    context: dict[str, Any]
     expected: dict[str, Any]
 
 
@@ -62,6 +63,9 @@ def load_golden_queries(path: Path) -> list[GoldenQuery]:
     for item in payload:
         if not isinstance(item, dict):
             raise ValueError(f"Golden query entries must be objects: {item!r}")
+        context = item.get("context") or {}
+        if not isinstance(context, dict):
+            raise ValueError(f"Golden query context value must be an object: {item!r}")
         expected = item.get("expected") or {}
         if not isinstance(expected, dict):
             raise ValueError(f"Golden query expected value must be an object: {item!r}")
@@ -71,6 +75,7 @@ def load_golden_queries(path: Path) -> list[GoldenQuery]:
                 query=str(item["query"]),
                 top_k=int(item.get("top_k") or 5),
                 filter=str(item.get("filter") or ""),
+                context=context,
                 expected=expected,
             )
         )
@@ -218,6 +223,42 @@ def evaluate_empty_hits(hits: list[dict[str, Any]], expected: dict[str, Any]) ->
     }
 
 
+def evaluate_sufficiency(sufficiency: Any, expected: dict[str, Any]) -> dict[str, Any]:
+    failures: list[str] = []
+
+    expected_status = expected.get("evidence_status")
+    if expected_status is not None and str(sufficiency.evidence_status) != str(expected_status):
+        failures.append(f"evidence_status {sufficiency.evidence_status!r} != {expected_status!r}")
+
+    min_coverage = expected.get("min_coverage_score")
+    if min_coverage is not None and sufficiency.coverage_score < float(min_coverage):
+        failures.append(f"coverage_score {sufficiency.coverage_score} < min_coverage_score {min_coverage}")
+
+    max_coverage = expected.get("max_coverage_score")
+    if max_coverage is not None and sufficiency.coverage_score > float(max_coverage):
+        failures.append(f"coverage_score {sufficiency.coverage_score} > max_coverage_score {max_coverage}")
+
+    expected_missing = {str(value) for value in list_values(expected.get("missing_document_types"))}
+    if expected_missing:
+        actual_missing = {str(value) for value in sufficiency.missing_document_types}
+        not_missing = sorted(expected_missing - actual_missing)
+        if not_missing:
+            failures.append(f"expected missing_document_types not actually missing: {not_missing}")
+
+    expected_weak = {str(value) for value in list_values(expected.get("weak_document_types"))}
+    if expected_weak:
+        actual_weak = {str(value) for value in sufficiency.weak_document_types}
+        not_weak = sorted(expected_weak - actual_weak)
+        if not_weak:
+            failures.append(f"expected weak_document_types not actually weak: {not_weak}")
+
+    expected_citations_ready = expected.get("citations_ready")
+    if expected_citations_ready is not None and bool(sufficiency.citations_ready) != bool(expected_citations_ready):
+        failures.append(f"citations_ready {sufficiency.citations_ready} != {expected_citations_ready}")
+
+    return {"passed": not failures, "failures": failures}
+
+
 def compact_hit(hit: dict[str, Any]) -> dict[str, Any]:
     content = str(hit.get("content") or "")
     return {
@@ -233,11 +274,16 @@ def compact_hit(hit: dict[str, Any]) -> dict[str, Any]:
         "classification": hit.get("classification"),
         "ndc": hit.get("ndc"),
         "recall_number": hit.get("recall_number"),
+        "filter_level": hit.get("filter_level"),
+        "rank_score": hit.get("rank_score"),
+        "rank_reasons": hit.get("rank_reasons"),
+        "matched_identifiers": hit.get("matched_identifiers"),
         "content_preview": content[:240].replace("\n", " "),
     }
 
 
 def context_from_expected(expected: dict[str, Any]) -> RetrievalContext:
+    # Legacy fallback for entries with no explicit `context:` block.
     any_hit, _ = split_expected(expected)
     return RetrievalContext(
         event_type=any_hit.get("event_type"),
@@ -245,6 +291,23 @@ def context_from_expected(expected: dict[str, Any]) -> RetrievalContext:
         rxnorm_rxcui=any_hit.get("rxnorm_rxcui"),
         recall_number=any_hit.get("recall_number"),
         classification=any_hit.get("classification"),
+    )
+
+
+def build_retrieval_context(golden: GoldenQuery) -> RetrievalContext:
+    if not golden.context:
+        return context_from_expected(golden.expected)
+
+    ndc = golden.context.get("ndc")
+    return RetrievalContext(
+        event_type=golden.context.get("event_type"),
+        drug_name=golden.context.get("drug_name"),
+        normalized_drug_name=golden.context.get("normalized_drug_name"),
+        rxnorm_rxcui=golden.context.get("rxnorm_rxcui"),
+        ndc=list_values(ndc) if ndc is not None else [],
+        lot=golden.context.get("lot"),
+        recall_number=golden.context.get("recall_number"),
+        classification=golden.context.get("classification"),
     )
 
 
@@ -270,7 +333,7 @@ def run_queries(
     for golden in queries:
         evidence_result = retrieval_service.retrieve(
             query=golden.query,
-            context=context_from_expected(golden.expected),
+            context=build_retrieval_context(golden),
             top_k=golden.top_k,
             filter_override=golden.filter or None,
         )
@@ -278,16 +341,27 @@ def run_queries(
         if dedupe_field:
             hits = dedupe_hits(hits, dedupe_field)[: golden.top_k]
         evaluation = evaluate_empty_hits(hits, golden.expected)
+        sufficiency_expected = golden.expected.get("sufficiency") or {}
+        if sufficiency_expected:
+            sufficiency_evaluation = evaluate_sufficiency(evidence_result.sufficiency, sufficiency_expected)
+            evaluation = {
+                **evaluation,
+                "passed": evaluation["passed"] and sufficiency_evaluation["passed"],
+                "failures": [*evaluation["failures"], *sufficiency_evaluation["failures"]],
+            }
         results.append(
             {
                 "id": golden.id,
                 "query": golden.query,
                 "filter": golden.filter,
+                "context": golden.context,
                 "expected": golden.expected,
                 "evaluation": evaluation,
                 "sufficiency": {
                     "evidence_status": evidence_result.sufficiency.evidence_status,
                     "coverage_score": evidence_result.sufficiency.coverage_score,
+                    "required_document_types": evidence_result.sufficiency.required_document_types,
+                    "found_document_types": evidence_result.sufficiency.found_document_types,
                     "missing_document_types": evidence_result.sufficiency.missing_document_types,
                     "weak_document_types": evidence_result.sufficiency.weak_document_types,
                     "citations_ready": evidence_result.sufficiency.citations_ready,
@@ -308,11 +382,34 @@ def print_text_report(results: list[dict[str, Any]]) -> None:
         print(f"query={result['query']}")
         if result["filter"]:
             print(f"filter={result['filter']}")
+        if result["context"]:
+            print(f"context={result['context']}")
+        sufficiency = result["sufficiency"]
+        print(
+            f"sufficiency: status={sufficiency['evidence_status']} "
+            f"coverage={sufficiency['coverage_score']} "
+            f"citations_ready={sufficiency['citations_ready']}"
+        )
+        print(
+            f"required={sufficiency['required_document_types']} "
+            f"found={sufficiency['found_document_types']} "
+            f"missing={sufficiency['missing_document_types']} "
+            f"weak={sufficiency['weak_document_types']}"
+        )
+        if not result["evaluation"]["passed"]:
+            for failure in result["evaluation"]["failures"]:
+                print(f"  [FAIL REASON] {failure}")
         for index, hit in enumerate(result["hits"], start=1):
             print(
                 f"  {index}. score={hit['score']} type={hit['document_type']} "
                 f"section={hit['section']} chunk={hit['chunk_id']}"
             )
+            print(
+                f"     filter_level={hit['filter_level']} rank_score={hit['rank_score']} "
+                f"rank_reasons={hit['rank_reasons']}"
+            )
+            if hit["matched_identifiers"]:
+                print(f"     matched_identifiers={hit['matched_identifiers']}")
             print(f"     {hit['content_preview']}")
 
 
@@ -325,6 +422,7 @@ def main() -> None:
                 query=args.query,
                 top_k=args.top_k,
                 filter=args.filter,
+                context={},
                 expected={},
             )
         ]

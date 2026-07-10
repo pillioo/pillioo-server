@@ -47,6 +47,7 @@ class MilvusCandidateRetriever(CandidateRetriever):
         self.filter_builder = filter_builder or MetadataFilterBuilder()
         self.nprobe = nprobe
         self.oversample = oversample
+        self.last_filter_attempts: list[dict[str, Any]] = []
 
     def retrieve(
         self,
@@ -57,9 +58,19 @@ class MilvusCandidateRetriever(CandidateRetriever):
         top_k: int,
         filter_override: str | None = None,
     ) -> list[EvidenceChunk]:
+        self.last_filter_attempts = []
         if filter_override:
             # Bypasses the plan entirely, so `top_k` sizes this instead of any target.
             hits = self._search(query_embedding=query_embedding, filter_expr=filter_override, limit=max(top_k, top_k * self.oversample))
+            self.last_filter_attempts.append(
+                {
+                    "target_document_type": "override",
+                    "level": "override",
+                    "expr": filter_override,
+                    "hit_count": len(hits),
+                    "stopped_on_hits": bool(hits),
+                }
+            )
             return [
                 EvidenceChunk.from_hit(
                     hit,
@@ -76,6 +87,15 @@ class MilvusCandidateRetriever(CandidateRetriever):
             # Levels go strongest-first; stop at the first one with hits instead of mixing levels.
             for candidate in self.filter_builder.build_filter_levels(context, target):
                 hits = self._search(query_embedding=query_embedding, filter_expr=candidate.expr, limit=target_limit)
+                self.last_filter_attempts.append(
+                    {
+                        "target_document_type": target.document_type,
+                        "level": candidate.level,
+                        "expr": candidate.expr,
+                        "hit_count": len(hits),
+                        "stopped_on_hits": bool(hits),
+                    }
+                )
                 if hits:
                     chunks.extend(
                         EvidenceChunk.from_hit(

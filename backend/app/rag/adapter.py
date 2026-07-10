@@ -43,6 +43,7 @@ def to_sufficiency_check_result(sufficiency: RagSufficiencyResult) -> Sufficienc
         found_sources=sufficiency.found_document_types,
         missing_sources=sufficiency.missing_document_types,
         weak_sources=sufficiency.weak_document_types,
+        failure_reasons=sufficiency.failure_reasons,
         coverage_score=sufficiency.coverage_score,
         evidence_status=sufficiency.evidence_status,
         needs_evidence_review=sufficiency.needs_evidence_review,

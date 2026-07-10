@@ -23,6 +23,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_prefix = ""
-        extra = "ignore"
+        extra = "ignore"  # 위에서 다루지 않는 .env의 나머지 키(EMBEDDING_PROVIDER 등)는 무시한다.
 
 settings = Settings()

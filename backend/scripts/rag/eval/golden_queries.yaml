@@ -2,6 +2,10 @@
   query: "Find the reason for the 2024 superpotent fentanyl Class I recall."
   top_k: 5
   filter: 'document_type == "recall_notice" and normalized_drug_name == "fentanyl"'
+  context:
+    event_type: recall
+    recall_number: D-0277-2024
+    classification: class_i
   expected:
     any_hit:
       document_type: recall_notice
@@ -20,6 +24,9 @@
   query: "What label evidence is available for piperacillin tazobactam?"
   top_k: 5
   filter: 'document_type == "label" and rxnorm_rxcui == "74169"'
+  context:
+    event_type: label_update
+    rxnorm_rxcui: "74169"
   expected:
     any_hit:
       document_type: label
@@ -35,6 +42,9 @@
   query: "What warnings or contraindications are relevant for warfarin sodium?"
   top_k: 5
   filter: 'document_type == "label" and rxnorm_rxcui == "114194"'
+  context:
+    event_type: label_update
+    normalized_drug_name: warfarin sodium
   expected:
     any_hit:
       document_type: label
@@ -57,6 +67,8 @@
   query: "What escalation policy applies when a required recall notice is missing?"
   top_k: 5
   filter: 'document_type == "policy" and section == "escalation_criteria"'
+  context:
+    event_type: recall
   expected:
     any_hit:
       document_id: policy-evidence-insufficiency-escalation
@@ -73,14 +85,15 @@
       min_evidence_count: 1
       must_have_citations: true
 
-# The four entries above all pin an explicit `filter:`, so RetrievalService's
-# filter_override path handles them end-to-end and the EvidenceRouter/
-# MetadataFilterBuilder fallback logic never runs. The two entries below omit
-# `filter:` so retrieval is driven purely by event_type + identifiers, the way
-# a real workflow call would use it.
+# Below: no `filter:`, so EvidenceRouter/MetadataFilterBuilder fallback runs
+# instead of filter_override.
 - id: fentanyl_recall_router_coverage
   query: "Find the reason for the 2024 superpotent fentanyl Class I recall."
   top_k: 5
+  context:
+    event_type: recall
+    recall_number: D-0277-2024
+    classification: class_i
   expected:
     any_hit:
       document_type: recall_notice
@@ -100,6 +113,9 @@
 - id: piperacillin_label_router_coverage
   query: "What label evidence is available for piperacillin tazobactam?"
   top_k: 5
+  context:
+    event_type: label_update
+    rxnorm_rxcui: "74169"
   expected:
     any_hit:
       document_type: label
@@ -112,3 +128,208 @@
         - sop
       min_evidence_count: 3
       must_have_citations: true
+
+# recall_number: null simulates EventNormalized.recall_number_is_fallback.
+- id: fentanyl_recall_fallback_recall_number_not_used_as_filter
+  query: "Find the reason for the 2024 superpotent fentanyl Class I recall."
+  top_k: 5
+  context:
+    event_type: recall
+    recall_number: null
+    classification: class_i
+  expected:
+    any_hit:
+      document_type: recall_notice
+      event_type: recall
+      recall_number: D-0277-2024
+      classification: class_i
+      content_contains:
+        - superpotent
+    set:
+      required_document_types:
+        - recall_notice
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true
+
+# Protected-compound identity (app/event/protected_compounds.json). Requires
+# fetch_labels --target-documents >= 90; see docs/rag-datasets.md.
+- id: sodium_chloride_protected_compound_label
+  query: "What warnings apply to concentrated sodium chloride injection?"
+  top_k: 5
+  filter: 'document_type == "label" and normalized_drug_name == "sodium chloride"'
+  context:
+    event_type: label_update
+    normalized_drug_name: sodium chloride
+  expected:
+    any_hit:
+      document_type: label
+      event_type: label_update
+      normalized_drug_name: sodium chloride
+      any_section:
+        - warnings
+        - indications_and_usage
+      content_contains:
+        - hypertonic
+    set:
+      required_document_types:
+        - label
+      min_evidence_count: 1
+      must_have_citations: true
+
+- id: shortage_inventory_policy_sop_coverage
+  query: "What evidence is required to assess inventory risk during a drug shortage?"
+  top_k: 5
+  context:
+    event_type: shortage
+  expected:
+    any_hit:
+      event_type: shortage
+      any_section:
+        - evidence_requirements
+        - procedure
+        - required_actions
+      content_contains:
+        - evidence
+    set:
+      required_document_types:
+        - policy
+        - sop
+      min_evidence_count: 2
+      must_have_citations: true
+
+- id: class_ii_recall_policy_sop_coverage
+  query: "What response steps apply to a Class II bupivacaine recall for a sterility issue?"
+  top_k: 5
+  context:
+    event_type: recall
+    recall_number: D-349-2013
+    normalized_drug_name: bupivacaine
+    classification: class_ii
+  expected:
+    any_hit:
+      document_type: recall_notice
+      event_type: recall
+      recall_number: D-349-2013
+      classification: class_ii
+      content_contains:
+        - sterility
+    set:
+      required_document_types:
+        - recall_notice
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true
+
+# ndc is reranker-only, not a hard filter; proves the ndc_match boost works.
+- id: ndc_exact_match_recall_identifier_retrieval
+  query: "What is the reason for the superpotent lidocaine recall, NDC 52565-009-50?"
+  top_k: 5
+  context:
+    event_type: recall
+    normalized_drug_name: lidocaine
+    ndc:
+      - "52565-009-50"
+  expected:
+    any_hit:
+      document_type: recall_notice
+      event_type: recall
+      recall_number: D-0280-2022
+      content_contains:
+        - superpotent
+      matched_identifiers:
+        ndc:
+          - "52565-009-50"
+    set:
+      required_document_types:
+        - recall_notice
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true
+
+# lot is reranker-only too; proves the lot_match boost works.
+- id: lot_exact_match_recall_identifier_retrieval
+  query: "What recall evidence applies to epinephrine, lot 21041W?"
+  top_k: 5
+  context:
+    event_type: recall
+    normalized_drug_name: epinephrine
+    lot: "21041W"
+  expected:
+    any_hit:
+      document_type: recall_notice
+      event_type: recall
+      recall_number: D-0763-2022
+      matched_identifiers:
+        lot: "21041W"
+    set:
+      required_document_types:
+        - recall_notice
+        - policy
+        - sop
+      min_evidence_count: 3
+      must_have_citations: true
+
+# filter excludes sop entirely so missing_document_types is deterministic.
+- id: shortage_missing_sop_evidence_insufficient
+  query: "What inventory allocation steps apply during a drug shortage?"
+  top_k: 5
+  filter: 'document_type == "policy" and section == "required_actions"'
+  context:
+    event_type: shortage
+  expected:
+    any_hit:
+      document_type: policy
+      event_type: shortage
+    set:
+      required_document_types:
+        - policy
+      min_evidence_count: 1
+      must_have_citations: true
+    sufficiency:
+      evidence_status: insufficient
+      missing_document_types:
+        - sop
+
+- id: label_update_boxed_warning_only
+  query: "What is the boxed warning for enoxaparin sodium regarding spinal or epidural hematomas?"
+  top_k: 5
+  filter: 'document_type == "label" and section == "boxed_warning"'
+  context:
+    event_type: label_update
+    normalized_drug_name: enoxaparin sodium
+    rxnorm_rxcui: "221095"
+  expected:
+    any_hit:
+      document_type: label
+      event_type: label_update
+      section: boxed_warning
+      normalized_drug_name: enoxaparin sodium
+      content_contains:
+        - epidural
+        - hematomas
+    set:
+      required_document_types:
+        - label
+      required_sections:
+        - boxed_warning
+      min_evidence_count: 1
+      must_have_citations: true
+
+# event_type: null (not a made-up string) so no document type is required and
+# the event_types filter is skipped instead of matching nothing.
+- id: unknown_event_type_broad_fallback
+  query: "What guidance applies to midazolam?"
+  top_k: 5
+  context:
+    event_type: null
+    normalized_drug_name: midazolam
+  expected:
+    set:
+      min_evidence_count: 1
+      must_have_citations: true
+    sufficiency:
+      evidence_status: sufficient
