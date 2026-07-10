@@ -471,7 +471,7 @@ class TestReviewDecision:
             )
 
 
-# TicketState — full composition test
+# TicketState -- full composition test
 
 class TestTicketState:
     def test_full_ticket_state_valid(self):
@@ -547,7 +547,6 @@ class TestTicketState:
         state = make_ticket_state()
         assert isinstance(state.draft_citations[0], DraftCitation)
         assert state.draft_citations[0].sentence == "Policy requires recall."
-
 
 
 # Cross-schema consistency: TicketState with blocked sentences
@@ -662,22 +661,29 @@ class TestEvidenceRoutingResult:
 
 
 class TestChatRequest:
-    def test_valid_ticket_scoped_chat_request(self):
-        request = ChatRequest(ticket_id="TICKET-001", user_query="What happened?")
+    # ticket_id is intentionally not part of this schema: it comes from the
+    # POST /chat/{ticket_id} path parameter instead (see app/chat/router.py).
+    def test_valid_chat_request_defaults_top_k(self):
+        request = ChatRequest(user_query="What happened?")
 
-        assert request.ticket_id == "TICKET-001"
+        assert request.user_query == "What happened?"
+        assert request.session_id is None
+        assert request.top_k == 5
 
-    def test_rejects_empty_ticket_id(self):
-        with pytest.raises(ValidationError, match="ticket_id"):
-            ChatRequest(ticket_id="", user_query="What happened?")
+    def test_rejects_empty_user_query(self):
+        with pytest.raises(ValidationError, match="user_query"):
+            ChatRequest(user_query="")
 
     def test_rejects_empty_session_id(self):
         with pytest.raises(ValidationError, match="session_id"):
             ChatRequest(
-                ticket_id="TICKET-001",
                 user_query="What happened?",
                 session_id="",
             )
+
+    def test_rejects_top_k_out_of_range(self):
+        with pytest.raises(ValidationError, match="top_k"):
+            ChatRequest(user_query="What happened?", top_k=0)
 
 
 class TestIdentityReviewPayload:

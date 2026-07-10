@@ -100,13 +100,13 @@ class TicketDetailResponse(BaseModel):
 
 class PendingApprovalItem(BaseModel):
     ticket_id: str
-    public_ticket_id: Optional[str] = None  # 추가
+    public_ticket_id: Optional[str] = None
     drug_name: str
-    recall_number: Optional[str] = None     # 추가
-    classification: Optional[Classification] = None  # 추가
-    review_type: Optional[ReviewType] = None  # Optional로 변경
-    priority: Optional[Priority] = None      # Optional로 변경
-    approval_status: Optional[str] = None    # 추가
+    recall_number: Optional[str] = None
+    classification: Optional[Classification] = None
+    review_type: Optional[ReviewType] = None
+    priority: Optional[Priority] = None
+    approval_status: Optional[str] = None
     created_at: datetime
 
 
@@ -144,9 +144,14 @@ class ReviseResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    ticket_id: str = Field(..., min_length=1)
-    user_query: str = Field(..., min_length=1)
-    session_id: Optional[str] = Field(default=None, min_length=1)
+    # ticket_id is intentionally not a field here: it is always supplied via
+    # the POST /chat/{ticket_id} path parameter, so a duplicate body field
+    # would only invite a client to send a mismatched value.
+    user_query: str = Field(..., min_length=1, description="Pharmacist's question")
+    session_id: Optional[str] = Field(
+        default=None, min_length=1, description="Existing session ID (reuses the ticket's session if omitted)"
+    )
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of evidence chunks to retrieve")
 
 
 class ChatResponse(BaseModel):
