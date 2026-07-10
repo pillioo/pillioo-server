@@ -140,6 +140,7 @@ def downgrade() -> None:
     op.drop_table('audit_logs')
     op.drop_index(op.f('ix_approvals_id'), table_name='approvals')
     op.drop_table('approvals')
+    op.execute('DROP TYPE approval_status')
     op.drop_index(op.f('ix_tickets_ticket_id'), table_name='tickets')
     op.drop_index(op.f('ix_tickets_openfda_id'), table_name='tickets')
     op.drop_index(op.f('ix_tickets_ndc'), table_name='tickets')
