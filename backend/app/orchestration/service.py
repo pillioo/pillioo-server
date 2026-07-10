@@ -7,6 +7,7 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from app.db.models.ticket import Ticket
+from app.orchestration.draft import LLMDraftGenerator
 from app.orchestration.steps import (
     evidence_gate_allows_draft,
     run_draft_step,
@@ -102,7 +103,7 @@ def run_ticket_workflow(
     state = build_initial_state(ticket, event)
 
     # CREATED means the ticket was persisted but the workflow never ran yet
-    # (e.g. via /events/upload) — treat it like a fresh run, not "already done".
+    # (e.g. via /events/upload) -- treat it like a fresh run, not "already done".
     already_processed = not created and not can_rerun_workflow(ticket.status)
     if already_processed:
         return OrchestrationResult(ticket=ticket, state=ticket_to_state(db, ticket), created=False)
@@ -134,7 +135,7 @@ def run_ticket_workflow(
             db=db,
             ticket=ticket,
             step_name=WorkflowStep.DRAFT_GENERATION,
-            func=lambda: run_draft_step(db, ticket, state, draft_generator=draft_generator or SimpleDraftGenerator()),
+            func=lambda: run_draft_step(db, ticket, state, draft_generator=draft_generator or LLMDraftGenerator()),
         )
         state = run_workflow_step(
             db=db,

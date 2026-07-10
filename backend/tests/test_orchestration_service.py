@@ -8,7 +8,7 @@ from app.db.models.audit_log_model import AuditLog
 from app.db.models.report_version_model import ReportVersion
 from app.db.models.ticket import Ticket
 from app.orchestration.retrieval_identity import resolve_retrieval_drug_name
-from app.orchestration.service import run_ticket_workflow
+from app.orchestration.service import SimpleDraftGenerator, run_ticket_workflow
 from app.orchestration.steps import coerce_inventory_row_ndc, normalize_inventory_match_payload, run_evidence_step
 from app.orchestration.tickets import build_event_idempotency_key
 from app.rag.models import (
@@ -406,7 +406,9 @@ def test_run_ticket_workflow_persists_state_and_audit_with_fake_evidence() -> No
     db = FakeSession()
     evidence_service = FakeEvidenceService()
 
-    result = run_ticket_workflow(db=db, event=event(), evidence_service=evidence_service)
+    result = run_ticket_workflow(
+        db=db, event=event(), evidence_service=evidence_service, draft_generator=SimpleDraftGenerator()
+    )
 
     assert db.committed is True
     assert result.ticket.ticket_id.startswith("T-")
@@ -481,8 +483,12 @@ def test_run_ticket_workflow_is_idempotent_for_same_event() -> None:
     db = FakeSession()
     evidence_service = FakeEvidenceService()
 
-    first = run_ticket_workflow(db=db, event=event(), evidence_service=evidence_service)
-    second = run_ticket_workflow(db=db, event=event(), evidence_service=evidence_service)
+    first = run_ticket_workflow(
+        db=db, event=event(), evidence_service=evidence_service, draft_generator=SimpleDraftGenerator()
+    )
+    second = run_ticket_workflow(
+        db=db, event=event(), evidence_service=evidence_service, draft_generator=SimpleDraftGenerator()
+    )
 
     tickets = [obj for obj in db.objects if isinstance(obj, Ticket)]
     assert len(tickets) == 1
@@ -535,7 +541,9 @@ def test_failed_ticket_retries_when_same_event_is_processed_again() -> None:
     with pytest.raises(RuntimeError):
         run_ticket_workflow(db=db, event=event(), evidence_service=FailingEvidenceService())
 
-    result = run_ticket_workflow(db=db, event=event(), evidence_service=FakeEvidenceService())
+    result = run_ticket_workflow(
+        db=db, event=event(), evidence_service=FakeEvidenceService(), draft_generator=SimpleDraftGenerator()
+    )
 
     tickets = [obj for obj in db.objects if isinstance(obj, Ticket)]
     assert len(tickets) == 1
@@ -547,7 +555,9 @@ def test_failed_ticket_retries_when_same_event_is_processed_again() -> None:
 def test_successful_workflow_saves_draft_v1_report_version() -> None:
     db = FakeSession()
 
-    result = run_ticket_workflow(db=db, event=event(), evidence_service=FakeEvidenceService())
+    result = run_ticket_workflow(
+        db=db, event=event(), evidence_service=FakeEvidenceService(), draft_generator=SimpleDraftGenerator()
+    )
 
     versions = [obj for obj in db.objects if isinstance(obj, ReportVersion)]
     assert len(versions) == 1
