@@ -72,6 +72,32 @@ class WorkflowRunResponse(BaseModel):
     message: str = "workflow started"
 
 
+class WorkflowStepStatus(BaseModel):
+    step: str
+    status: str  # "pending" | "succeeded" | "failed" | "skipped"
+    duration_ms: Optional[int] = None
+    reason: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+
+class TicketDetailResponse(BaseModel):
+    ticket_id: str
+    status: TicketStatus
+    workflow_stage: str
+    drug_name: str
+    ndc: str
+    lot: Optional[str] = None
+    classification: Optional[Classification] = None
+    recall_number: Optional[str] = None
+    priority: Optional[str] = None
+    review_type: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    can_rerun: bool
+    failure_reason: Optional[str] = None
+    steps: list[WorkflowStepStatus]
+
+
 class PendingApprovalItem(BaseModel):
     ticket_id: str
     drug_name: str

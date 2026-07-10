@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import Session
+
+from app.db.models.approval_model import Approval
 from app.db.models.ticket import Ticket
 from app.schemas.common import (
     ApprovalStatus,
@@ -15,7 +18,7 @@ from app.schemas.inventory import ImpactSummary, InventoryMatchResult
 from app.schemas.workflow import ReviewDecision, TicketState, TrustChecks
 
 
-def ticket_to_state(ticket: Ticket) -> TicketState:
+def ticket_to_state(db: Session, ticket: Ticket) -> TicketState:
     event = EventNormalized(
         event_id=ticket.openfda_id or ticket.recall_number or ticket.ticket_id,
         event_type=EventType(ticket.event_type),
@@ -25,6 +28,7 @@ def ticket_to_state(ticket: Ticket) -> TicketState:
         classification=Classification(ticket.classification) if ticket.classification else None,
         status=ticket.source_status or "unknown",
         recall_number=ticket.recall_number,
+        recall_number_is_fallback=ticket.recall_number_is_fallback,
         product_description=ticket.product_description,
         reason_for_recall=ticket.reason_for_recall,
     )
@@ -45,10 +49,20 @@ def ticket_to_state(ticket: Ticket) -> TicketState:
         safety_result=_parse_optional(SafetyCheckResult, ticket.safety_result),
         trust_checks=TrustChecks(**ticket.trust_checks) if ticket.trust_checks else TrustChecks(),
         policy_decision=_parse_optional(ReviewDecision, ticket.policy_decision),
-        approval_status=ApprovalStatus.PENDING,
+        approval_status=_latest_approval_status(db, ticket.id),
         created_at=ticket.created_at or now,
         updated_at=ticket.updated_at or ticket.created_at or now,
     )
+
+
+def _latest_approval_status(db: Session, ticket_id: int) -> ApprovalStatus:
+    latest = (
+        db.query(Approval)
+        .filter(Approval.ticket_id == ticket_id)
+        .order_by(Approval.created_at.desc())
+        .first()
+    )
+    return ApprovalStatus(latest.status) if latest else ApprovalStatus.PENDING
 
 
 def _parse_optional(schema, value):

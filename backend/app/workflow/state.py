@@ -35,3 +35,9 @@ def stage_for_status(status: TicketStatus) -> WorkflowStage:
     if status in {TicketStatus.APPROVED, TicketStatus.REJECTED, TicketStatus.CLOSED}:
         return WorkflowStage.CLOSED
     return WorkflowStage.PENDING_MANUAL_REVIEW
+
+
+def can_rerun_workflow(status: str) -> bool:
+    # Mirrors run_ticket_workflow's own guard: CREATED means it never ran yet,
+    # WORKFLOW_FAILED means it's retryable. Anything further along is done.
+    return status in (TicketStatus.CREATED.value, TicketStatus.WORKFLOW_FAILED.value)

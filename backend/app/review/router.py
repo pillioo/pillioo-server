@@ -4,6 +4,7 @@ Review Router
 FastAPI router for pharmacist review workspace endpoints.
 
 Endpoints:
+    GET  /tickets/{ticket_id}            → consolidated ticket detail (status, steps, can_rerun)
     GET  /tickets/{ticket_id}/review     → review payload (pharmacist screen)
     GET  /approval/pending               → pending approval list
     POST /approval/{ticket_id}/approve   → approve ticket
@@ -25,7 +26,9 @@ from app.report.versioning import get_latest_report, get_report_versions
 from app.review.approval import handle_approve, handle_reject, handle_revise
 from app.review.errors import ReviewError, raise_review_error
 from app.review.tickets import get_ticket_by_public_id, get_ticket_by_recall_number
+from app.review.ticket_detail import build_ticket_detail
 from app.schemas.common import ApprovalStatus
+from app.schemas.io import TicketDetailResponse
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
 
 from app.orchestration.state import ticket_to_state
@@ -58,6 +61,19 @@ async def find_ticket_by_recall_number(
     }
 
 
+@router.get("/tickets/{ticket_id}", response_model=TicketDetailResponse)
+async def get_ticket_detail(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    워크플로우 실행 화면용 통합 조회.
+    상태/단계별 진행 상황(audit_logs 기반)/실패 사유/재실행 가능 여부를 한 번에 반환한다.
+    """
+    ticket = get_ticket_by_public_id(db, ticket_id)
+    return build_ticket_detail(db, ticket)
+
+
 @router.get("/tickets/{ticket_id}/review")
 async def get_review_payload(
     ticket_id: str,
@@ -84,7 +100,7 @@ async def get_review_payload(
             }
         )
     # Convert DB ticket to TicketState and build review payload
-    state = ticket_to_state(ticket)
+    state = ticket_to_state(db, ticket)
 
     if not state.review_type:
         raise_review_error(
@@ -169,7 +185,7 @@ async def approve_ticket(
 
     return handle_approve(
         db=db,
-        ticket_id=ticket.id,
+        ticket=ticket,
         public_ticket_id=ticket.ticket_id,
         request=request,
         current_draft=current_draft,
@@ -189,7 +205,7 @@ async def reject_ticket(
     ticket = get_ticket_by_public_id(db, ticket_id)
     return handle_reject(
         db=db,
-        ticket_id=ticket.id,
+        ticket=ticket,
         public_ticket_id=ticket.ticket_id,
         request=request,
     )
