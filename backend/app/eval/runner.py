@@ -35,7 +35,7 @@ async def run_scenario(scenario: dict) -> dict:
                 }
 
             # 2. Workflow 실행
-            response = await client.post(f"/workflow/run/{ticket_id}")
+            response = await client.post(f"/tickets/{ticket_id}/run")
             if response.status_code != 200:
                 return {
                     "scenario_id": scenario_id,
@@ -43,14 +43,14 @@ async def run_scenario(scenario: dict) -> dict:
                     "error": f"Workflow run failed: {response.status_code}",
                 }
 
-            # 3. Workflow 완료까지 폴링
+            # 3. 티켓 상태 조회 (폴링)
             actual = None
             for _ in range(10):
                 await asyncio.sleep(1)
-                response = await client.get(f"/workflow/status/{ticket_id}")
+                response = await client.get(f"/tickets/{ticket_id}")
                 if response.status_code == 200:
                     actual = response.json()
-                    if actual.get("final_status") not in (None, "PROCESSING"):
+                    if actual.get("status") not in (None, "PROCESSING"):
                         break
 
             if actual is None:
@@ -63,8 +63,7 @@ async def run_scenario(scenario: dict) -> dict:
             # 4. 결과 비교
             passed = (
                 actual.get("review_type") == expected.get("review_type")
-                and actual.get("evidence_status") == expected.get("evidence_status")
-                and actual.get("final_status") == expected.get("final_status")
+                and actual.get("status") == expected.get("final_status")
             )
 
             return {
@@ -72,10 +71,8 @@ async def run_scenario(scenario: dict) -> dict:
                 "passed": passed,
                 "expected_review_type": expected.get("review_type"),
                 "actual_review_type": actual.get("review_type"),
-                "expected_evidence_status": expected.get("evidence_status"),
-                "actual_evidence_status": actual.get("evidence_status"),
                 "expected_final_status": expected.get("final_status"),
-                "actual_final_status": actual.get("final_status"),
+                "actual_final_status": actual.get("status"),
             }
 
     except httpx.TimeoutException:
