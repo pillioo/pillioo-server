@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from pillioo.inventory.matcher import inventory_match
-from pillioo.inventory.impact import assess_impact
-from pillioo.inventory.quality import inventory_quality_check
+from app.db.models.ticket import Ticket
+from app.inventory.matcher import inventory_match
+from app.inventory.impact import assess_impact
+from app.inventory.quality import inventory_quality_check
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -13,20 +14,20 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 def get_inventory_impact(ticket_id: str, db: Session = Depends(get_db)):
     """
     ticket_id 기준으로 재고 영향도를 조회한다.
-    P4 review payload에 포함되는 엔드포인트.
+    ticket의 drug_name, ndc, lot 정보로 재고 매칭 결과를 반환한다.
     """
-    # TODO: ticket_id로 DB에서 이벤트 정보 조회
-    # 현재는 mock 데이터로 테스트
-    mock_event = {
-        "drug_name": "midazolam",
-        "ndc": "00641601441",
-        "lot": "LOT-A",
-    }
+    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found")
+
+    drug_name = ticket.drug_name or ""
+    ndc = ticket.ndc or ""
+    lot = ticket.lot_number or ""
 
     match_result = inventory_match(
-        drug_name=mock_event["drug_name"],
-        ndc=mock_event["ndc"],
-        lot=mock_event["lot"],
+        drug_name=drug_name,
+        ndc=ndc,
+        lot=lot,
     )
 
     if not match_result.get("matched"):
