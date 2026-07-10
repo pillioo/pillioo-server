@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.orchestration.service import DraftGenerator, LLMDraftGenerator, SimpleDraftGenerator
+from app.orchestration.draft import LLMDraftGenerator
+from app.orchestration.service import DraftGenerator, SimpleDraftGenerator
 from app.schemas.common import Classification, Department, EventType, Priority
 from app.schemas.event import EventNormalized
 from app.schemas.evidence import Citation, EvidenceChunk, EvidenceResult
