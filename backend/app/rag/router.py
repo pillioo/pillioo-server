@@ -1,3 +1,10 @@
+"""Evidence retrieval planning router.
+
+This module owns the internal RAG planning contract: event type -> required
+evidence document types and target sections. FastAPI endpoints for RAG/evidence
+debugging live in app.rag.api.
+"""
+
 from __future__ import annotations
 
 from app.rag.models import EvidencePlan, EvidenceTarget, RetrievalContext

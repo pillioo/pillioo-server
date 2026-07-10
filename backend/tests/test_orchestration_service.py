@@ -417,6 +417,7 @@ def test_run_ticket_workflow_persists_state_and_audit_with_fake_evidence() -> No
     audit_steps = [getattr(obj, "step_name", None) for obj in db.objects]
     assert "inventory_match" in audit_steps
     assert "evidence_retrieval" in audit_steps
+    assert "sufficiency_check" in audit_steps
     assert "policy_aggregation" in audit_steps
 
     evidence_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "evidence_retrieval")
@@ -433,6 +434,44 @@ def test_run_ticket_workflow_persists_state_and_audit_with_fake_evidence() -> No
     policy_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "policy_aggregation")
     assert policy_audit.output_json["review_type"] == ReviewType.FINAL_APPROVAL.value
     assert policy_audit.output_json["final_routing_reason"]
+
+
+def test_workflow_skips_draft_and_safety_when_evidence_gate_blocks() -> None:
+    db = FakeSession()
+    evidence_service = FakeEvidenceService(
+        SufficiencyResult(
+            required_document_types=["recall_notice", "policy", "sop"],
+            found_document_types=["recall_notice", "policy"],
+            missing_document_types=["sop"],
+            weak_document_types=[],
+            coverage_score=0.67,
+            evidence_status=EvidenceStatus.INSUFFICIENT.value,
+            needs_evidence_review=True,
+            citations_ready=True,
+            failure_reasons=[{"reason": "missing_required_document_type", "document_type": "sop"}],
+        )
+    )
+
+    result = run_ticket_workflow(db=db, event=event(), evidence_service=evidence_service)
+
+    assert result.ticket.status == TicketStatus.REVIEW_ROUTED.value
+    assert result.ticket.review_type == ReviewType.EVIDENCE_REVIEW.value
+    assert result.ticket.draft_text is None
+    assert [obj for obj in db.objects if isinstance(obj, ReportVersion)] == []
+
+    gate_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "sufficiency_check")
+    assert gate_audit.output_json["gate_status"] == "blocked"
+    assert gate_audit.output_json["skip_reason"] == "insufficient_evidence"
+
+    draft_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "draft_generation")
+    assert draft_audit.output_json == {"step_status": "skipped", "reason": "insufficient_evidence"}
+    safety_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "safety_check")
+    assert safety_audit.output_json == {"step_status": "skipped", "reason": "draft_generation_skipped"}
+
+    policy_audit = next(obj for obj in db.objects if isinstance(obj, AuditLog) and obj.step_name == "policy_aggregation")
+    assert policy_audit.output_json["review_type"] == ReviewType.EVIDENCE_REVIEW.value
+    assert policy_audit.output_json["failure_reasons"] == [{"reason": "missing_required_document_type", "document_type": "sop"}]
+    assert "missing_required_document_type" in policy_audit.output_json["final_routing_reason"]
 
 
 def test_run_ticket_workflow_is_idempotent_for_same_event() -> None:

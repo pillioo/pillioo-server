@@ -38,7 +38,7 @@ def aggregate_policy_decision(state: TicketState) -> ReviewDecision:
     if requires_evidence_review(sufficiency):
         return ReviewDecision(
             review_type=ReviewType.EVIDENCE_REVIEW,
-            reasons=["Required evidence is missing or weak."],
+            reasons=evidence_review_reasons(sufficiency),
             decision=PolicyDecisionAction.ROUTE_TO_HITL,
         )
 
@@ -63,6 +63,23 @@ def aggregate_policy_decision(state: TicketState) -> ReviewDecision:
     )
 
 
+def evidence_review_reasons(sufficiency) -> list[str]:
+    if sufficiency is None:
+        return ["Sufficiency check is missing."]
+    reasons = [reason.get("reason") for reason in getattr(sufficiency, "failure_reasons", []) if reason.get("reason")]
+    if reasons:
+        return [f"Evidence gate blocked draft generation: {', '.join(sorted(set(reasons)))}."]
+    if sufficiency.missing_sources:
+        missing = ", ".join(source.value for source in sufficiency.missing_sources)
+        return [f"Required evidence is missing: {missing}."]
+    if getattr(sufficiency, "weak_sources", []):
+        weak = ", ".join(source.value for source in sufficiency.weak_sources)
+        return [f"Required evidence is weak: {weak}."]
+    if getattr(sufficiency, "citations_ready", True) is False:
+        return ["Evidence citations are not ready for draft generation."]
+    return ["Required evidence is missing or weak."]
+
+
 def policy_audit_output(state: TicketState, decision: ReviewDecision, ticket_policy_decision: dict) -> dict:
     return {
         "step_status": "succeeded",
@@ -75,6 +92,9 @@ def policy_audit_output(state: TicketState, decision: ReviewDecision, ticket_pol
         "evidence_status": state.sufficiency_check.evidence_status.value if state.sufficiency_check else None,
         "coverage_score": state.sufficiency_check.coverage_score if state.sufficiency_check else None,
         "missing_sources": [source.value for source in state.sufficiency_check.missing_sources] if state.sufficiency_check else [],
+        "weak_sources": [source.value for source in state.sufficiency_check.weak_sources] if state.sufficiency_check else [],
+        "failure_reasons": state.sufficiency_check.failure_reasons if state.sufficiency_check else [],
+        "citations_ready": state.sufficiency_check.citations_ready if state.sufficiency_check else None,
         "blocked_sentence_count": len(state.safety_result.blocked_sentences) if state.safety_result else 0,
         "final_routing_reason": decision.reasons[0] if decision.reasons else "",
         "policy_decision": ticket_policy_decision,
