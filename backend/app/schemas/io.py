@@ -100,9 +100,13 @@ class TicketDetailResponse(BaseModel):
 
 class PendingApprovalItem(BaseModel):
     ticket_id: str
+    public_ticket_id: Optional[str] = None  # 추가
     drug_name: str
-    review_type: ReviewType
-    priority: Priority
+    recall_number: Optional[str] = None     # 추가
+    classification: Optional[Classification] = None  # 추가
+    review_type: Optional[ReviewType] = None  # Optional로 변경
+    priority: Optional[Priority] = None      # Optional로 변경
+    approval_status: Optional[str] = None    # 추가
     created_at: datetime
 
 
