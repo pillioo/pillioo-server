@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -256,6 +257,17 @@ def evaluate_sufficiency(sufficiency: Any, expected: dict[str, Any]) -> dict[str
     if expected_citations_ready is not None and bool(sufficiency.citations_ready) != bool(expected_citations_ready):
         failures.append(f"citations_ready {sufficiency.citations_ready} != {expected_citations_ready}")
 
+    expected_failure_reasons = {str(value) for value in list_values(expected.get("failure_reasons"))}
+    if expected_failure_reasons:
+        actual_failure_reasons = {
+            str(reason.get("reason"))
+            for reason in getattr(sufficiency, "failure_reasons", [])
+            if reason.get("reason")
+        }
+        missing = sorted(expected_failure_reasons - actual_failure_reasons)
+        if missing:
+            failures.append(f"expected failure_reasons not present: {missing}")
+
     return {"passed": not failures, "failures": failures}
 
 
@@ -365,16 +377,91 @@ def run_queries(
                     "missing_document_types": evidence_result.sufficiency.missing_document_types,
                     "weak_document_types": evidence_result.sufficiency.weak_document_types,
                     "citations_ready": evidence_result.sufficiency.citations_ready,
+                    "failure_reasons": evidence_result.sufficiency.failure_reasons,
                 },
+                "retrieval_trace": evidence_result.retrieval_trace,
                 "hits": [compact_hit(hit) for hit in hits],
             }
         )
     return results
 
 
-def print_text_report(results: list[dict[str, Any]]) -> None:
+def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
     passed = sum(1 for result in results if result["evaluation"]["passed"])
-    print(f"[SUMMARY] passed={passed}/{len(results)}")
+    any_hit_cases = [
+        result
+        for result in results
+        if split_expected(result.get("expected") or {})[0]
+    ]
+    ranks = [result["evaluation"]["rank"] for result in any_hit_cases if result["evaluation"]["rank"]]
+    expected_sufficiency_cases = [
+        result
+        for result in results
+        if (result.get("expected") or {}).get("sufficiency", {}).get("evidence_status") is not None
+    ]
+    failure_counter: Counter[str] = Counter()
+    for result in results:
+        for failure in result["evaluation"]["failures"]:
+            failure_counter[failure.split(":")[0]] += 1
+        for reason in result["sufficiency"].get("failure_reasons", []):
+            if reason.get("reason"):
+                failure_counter[f"sufficiency:{reason['reason']}"] += 1
+
+    return {
+        "total": total,
+        "passed": passed,
+        "pass_rate": round(passed / total, 4) if total else 1.0,
+        "recall_at_k": round(len(ranks) / len(any_hit_cases), 4) if any_hit_cases else None,
+        "mrr": round(sum(1 / rank for rank in ranks) / len(any_hit_cases), 4) if any_hit_cases else None,
+        "document_type_coverage": coverage_metric(results, "required_document_types", "document_type"),
+        "section_coverage": coverage_metric(results, "required_sections", "section"),
+        "citation_readiness_rate": round(
+            sum(1 for result in results if result["sufficiency"]["citations_ready"]) / total,
+            4,
+        ) if total else 1.0,
+        "sufficiency_accuracy": round(
+            sum(
+                1
+                for result in expected_sufficiency_cases
+                if result["sufficiency"]["evidence_status"]
+                == result["expected"]["sufficiency"]["evidence_status"]
+            )
+            / len(expected_sufficiency_cases),
+            4,
+        ) if expected_sufficiency_cases else None,
+        "failure_distribution": dict(sorted(failure_counter.items())),
+    }
+
+
+def coverage_metric(results: list[dict[str, Any]], expected_key: str, hit_key: str) -> float | None:
+    expected_total = 0
+    found_total = 0
+    for result in results:
+        _, set_expected = split_expected(result.get("expected") or {})
+        expected_values = {str(value) for value in list_values(set_expected.get(expected_key))}
+        if not expected_values:
+            continue
+        actual_values = {str(hit.get(hit_key)) for hit in result["hits"] if hit.get(hit_key)}
+        expected_total += len(expected_values)
+        found_total += len(expected_values & actual_values)
+    return round(found_total / expected_total, 4) if expected_total else None
+
+
+def print_text_report(results: list[dict[str, Any]]) -> None:
+    summary = summarize_results(results)
+    print(
+        "[SUMMARY] "
+        f"passed={summary['passed']}/{summary['total']} "
+        f"pass_rate={summary['pass_rate']} "
+        f"recall_at_k={summary['recall_at_k']} "
+        f"mrr={summary['mrr']} "
+        f"section_coverage={summary['section_coverage']} "
+        f"citation_readiness={summary['citation_readiness_rate']} "
+        f"sufficiency_accuracy={summary['sufficiency_accuracy']}"
+    )
+    if summary["failure_distribution"]:
+        print(f"[FAILURE DISTRIBUTION] {summary['failure_distribution']}")
     for result in results:
         status = "PASS" if result["evaluation"]["passed"] else "FAIL"
         rank = result["evaluation"]["rank"]
@@ -396,6 +483,8 @@ def print_text_report(results: list[dict[str, Any]]) -> None:
             f"missing={sufficiency['missing_document_types']} "
             f"weak={sufficiency['weak_document_types']}"
         )
+        if sufficiency["failure_reasons"]:
+            print(f"failure_reasons={sufficiency['failure_reasons']}")
         if not result["evaluation"]["passed"]:
             for failure in result["evaluation"]["failures"]:
                 print(f"  [FAIL REASON] {failure}")
@@ -440,7 +529,7 @@ def main() -> None:
     )
 
     if args.json:
-        print(json.dumps(results, ensure_ascii=False, indent=2))
+        print(json.dumps({"summary": summarize_results(results), "results": results}, ensure_ascii=False, indent=2))
     else:
         print_text_report(results)
 
