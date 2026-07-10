@@ -7,7 +7,7 @@ To ensure security and smooth testing, please strictly adhere to the guidelines 
 
 ## 1. EC2 Instance Information
 - **Server Name:** `pillioo-server` (t3.micro / Ubuntu)
-- **Public IP:** `13.125.245.214` (*Note: Elastic IP is not attached. The IP address may change upon instance reboot.*)
+- **Public IP:** `Dynamic IP` (*Note: Elastic IP is not attached. The IP address changes upon instance reboot. Please check the output of `deploy.sh` or the team channel for the current IP.*)
 - **SSH User:** `ubuntu`
 - **Access Key:** `pillioo-key.pem`
 

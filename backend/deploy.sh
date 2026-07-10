@@ -30,6 +30,15 @@ sleep 5
 echo "Running Alembic database migrations..."
 docker compose exec fastapi alembic upgrade head
 
-echo "[Pillioo] All containers have been successfully deployed and initialized!"
-echo "Current container status:"
+echo "✨ [Pillioo] All containers have been successfully deployed and initialized!"
+echo "📊 Current container status:"
 docker compose ps
+
+# Fetch current instance's public IP and display Swagger UI URL
+echo "--------------------------------------------------"
+echo "🌍 Fetching current Public IP..."
+CURRENT_IP=$(curl -s https://api.ipify.org)
+
+echo "📌 Swagger UI is available at:"
+echo "👉 http://${CURRENT_IP}:8000/docs"
+echo "--------------------------------------------------"
