@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import (
     ApprovalStatus,
@@ -21,6 +21,23 @@ from app.schemas.evidence import Citation
 
 
 class EventUploadRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "recall_number": "D-TEST-2026-001",
+                    "product_description": "Midazolam HCl Injection 1 mg/mL vial",
+                    "reason_for_recall": "Subpotent drug product",
+                    "classification": "class_i",
+                    "product_ndc": "00641-6014-41",
+                    "lot_number": "LOT-A",
+                    "recall_initiation_date": "2026-07-09",
+                    "status": "ongoing",
+                }
+            ]
+        }
+    )
+
     recall_number: str
     product_description: str
     reason_for_recall: str

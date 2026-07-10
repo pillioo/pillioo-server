@@ -21,7 +21,7 @@ from app.schemas.review import (
     EvidenceIssue,
 )
 from app.schemas.workflow import TicketState
-from backend.app.review.errors import ReviewError, ReviewError, raise_review_error
+from app.review.errors import ReviewError, raise_review_error
 
 
 def build_review_payload(state: TicketState) -> ReviewPayload:

@@ -24,7 +24,7 @@ from app.db.session import get_db
 from app.report.versioning import get_latest_report, get_report_versions
 from app.review.approval import handle_approve, handle_reject, handle_revise
 from app.review.errors import ReviewError, raise_review_error
-from app.review.tickets import get_ticket_by_public_id
+from app.review.tickets import get_ticket_by_public_id, get_ticket_by_recall_number
 from app.schemas.common import ApprovalStatus
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
 
@@ -38,6 +38,25 @@ router = APIRouter(tags=["review"])
 # ──────────────────────────────────────────────
 # Review Workspace
 # ──────────────────────────────────────────────
+
+@router.get("/tickets")
+async def find_ticket_by_recall_number(
+    recall_number: str,
+    db: Session = Depends(get_db),
+):
+    """
+    recall_number로 ticket_id를 찾기 위한 조회용 엔드포인트 (Swagger 테스트 편의용).
+    같은 recall_number로 여러 번 업로드해도 티켓은 하나만 생성되므로 가장 최근 건을 반환한다.
+    """
+    ticket = get_ticket_by_recall_number(db, recall_number)
+    return {
+        "ticket_id": ticket.ticket_id,
+        "recall_number": ticket.recall_number,
+        "status": ticket.status,
+        "workflow_stage": ticket.workflow_stage,
+        "created_at": ticket.created_at,
+    }
+
 
 @router.get("/tickets/{ticket_id}/review")
 async def get_review_payload(

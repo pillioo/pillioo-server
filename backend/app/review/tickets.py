@@ -11,3 +11,15 @@ def get_ticket_by_public_id(db: Session, ticket_id: str) -> Ticket:
     if ticket is None:
         raise_review_error(ReviewError.TICKET_NOT_FOUND, {"ticket_id": ticket_id})
     return ticket
+
+
+def get_ticket_by_recall_number(db: Session, recall_number: str) -> Ticket:
+    ticket = (
+        db.query(Ticket)
+        .filter(Ticket.recall_number == recall_number)
+        .order_by(Ticket.created_at.desc())
+        .first()
+    )
+    if ticket is None:
+        raise_review_error(ReviewError.TICKET_NOT_FOUND, {"recall_number": recall_number})
+    return ticket
