@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text
+from sqlalchemy import Boolean, Column, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -24,6 +24,9 @@ class Ticket(TimeStampedModel):
 
     # 3. RAG/Evidence 및 외부 연동 데이터
     recall_number = Column(String, nullable=True)
+    # recall_number이 event_id로 대체된 fallback 값인지 여부.
+    # 워크플로우 재실행 시 recall_number을 강한 필터로 쓸지 판단하는 데 필요.
+    recall_number_is_fallback = Column(Boolean, nullable=False, default=False, server_default="false")
     reason_for_recall = Column(String, nullable=True)
     product_description = Column(String, nullable=True)
 

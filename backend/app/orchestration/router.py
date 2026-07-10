@@ -33,20 +33,23 @@ def _event_from_ticket(ticket) -> EventNormalized:
         classification=Classification(ticket.classification) if ticket.classification else None,
         status=ticket.source_status or "ongoing",
         recall_number=ticket.recall_number,
+        recall_number_is_fallback=ticket.recall_number_is_fallback,
         reason_for_recall=ticket.reason_for_recall,
         product_description=ticket.product_description,
     )
 
 
 @router.post("/tickets/{ticket_id}/run", response_model=WorkflowRunResponse)
-async def run_ticket(
+def run_ticket(
     ticket_id: str,
     db: Session = Depends(get_db),
 ) -> WorkflowRunResponse:
     """
-    이미 생성된 티켓에 대해 orchestration 워크플로우를 실행(또는 재실행)한다.
-    CREATED/WORKFLOW_FAILED 상태의 티켓만 실제로 처리되고, 이미 처리된 티켓은
-    현재 상태를 그대로 반환한다 (중복 실행 방지).
+    Run or rerun the orchestration workflow for an existing ticket.
+
+    Only tickets in the CREATED or WORKFLOW_FAILED state are actually processed.
+    Tickets that have already been processed return their current state unchanged
+    to prevent duplicate execution.
     """
     ticket = get_ticket_by_public_id(db, ticket_id)
     event = _event_from_ticket(ticket)
@@ -55,9 +58,7 @@ async def run_ticket(
         collection_name=settings.MILVUS_COLLECTION,
         embedding_model=settings.EMBEDDING_MODEL,
     )
-
     result = run_ticket_workflow(db=db, event=event, evidence_service=evidence_service)
-
     return WorkflowRunResponse(
         ticket_id=result.ticket.ticket_id,
         status=TicketStatus(result.ticket.status),

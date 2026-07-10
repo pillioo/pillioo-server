@@ -19,6 +19,7 @@ from app.schemas.common import ReportVersionTag, TicketStatus, WorkflowStep
 from app.schemas.evidence import EvidenceResult
 from app.schemas.inventory import ImpactSummary, InventoryMatchResult
 from app.schemas.workflow import TicketState
+from app.workflow.policy import requires_evidence_review
 from app.workflow.routing import aggregate_policy_decision, policy_audit_output
 from app.workflow.state import WorkflowStage, stage_for_status
 
@@ -210,6 +211,82 @@ def run_draft_step(
         duration_ms=_elapsed_ms(started),
     )
     return updated
+
+
+def run_evidence_gate_step(db: Session, ticket: Ticket, state: TicketState) -> TicketState:
+    started = time.perf_counter()
+    gate = evidence_gate_output(state)
+    # The gate is deliberately a routing/audit decision, not a hard workflow
+    # failure. Insufficient evidence should route to pharmacist review instead
+    # of generating a weak draft or marking the ticket retryable.
+    if not gate["can_generate_draft"]:
+        ticket.workflow_stage = WorkflowStage.PENDING_POLICY_AGGREGATION.value
+
+    write_audit_log(
+        db=db,
+        ticket_id=ticket.id,
+        step_name=WorkflowStep.SUFFICIENCY_CHECK,
+        input_json={
+            "evidence_status": state.sufficiency_check.evidence_status.value if state.sufficiency_check else None,
+            "citations_ready": state.sufficiency_check.citations_ready if state.sufficiency_check else None,
+        },
+        output_json={"step_status": "succeeded", **gate},
+        duration_ms=_elapsed_ms(started),
+    )
+    return state
+
+
+def evidence_gate_allows_draft(state: TicketState) -> bool:
+    return not requires_evidence_review(state.sufficiency_check)
+
+
+def evidence_gate_output(state: TicketState) -> dict:
+    sufficiency = state.sufficiency_check
+    can_generate = evidence_gate_allows_draft(state)
+    if sufficiency is None:
+        return {
+            "gate_status": "blocked",
+            "can_generate_draft": False,
+            "skip_reason": "missing_sufficiency_check",
+            "failure_reasons": [{"reason": "missing_sufficiency_check"}],
+            "missing_sources": [],
+            "weak_sources": [],
+            "citations_ready": False,
+        }
+
+    return {
+        "gate_status": "passed" if can_generate else "blocked",
+        "can_generate_draft": can_generate,
+        "skip_reason": "" if can_generate else "insufficient_evidence",
+        "evidence_status": sufficiency.evidence_status.value,
+        "coverage_score": sufficiency.coverage_score,
+        "missing_sources": [source.value for source in sufficiency.missing_sources],
+        "weak_sources": [source.value for source in sufficiency.weak_sources],
+        "failure_reasons": sufficiency.failure_reasons,
+        "citations_ready": sufficiency.citations_ready,
+    }
+
+
+def write_skipped_workflow_step(
+    *,
+    db: Session,
+    ticket: Ticket,
+    step_name: WorkflowStep,
+    reason: str,
+    input_json: dict | None = None,
+) -> None:
+    started = time.perf_counter()
+    write_audit_log(
+        db=db,
+        ticket_id=ticket.id,
+        step_name=step_name,
+        input_json=input_json or {},
+        output_json={
+            "step_status": "skipped",
+            "reason": reason,
+        },
+        duration_ms=_elapsed_ms(started),
+    )
 
 
 def run_safety_step(db: Session, ticket: Ticket, state: TicketState) -> TicketState:
