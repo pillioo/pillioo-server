@@ -74,3 +74,10 @@ class TrustCheckResult(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     flags: list[str] = Field(default_factory=list)
     review_required: bool = False
+
+class InventoryImpactResponse(BaseModel):
+    ticket_id: str
+    match_result: InventoryMatchResult
+    impact_result: ImpactSummary
+    quality_result: TrustCheckResult
+    no_match_reason: Optional[str] = None
