@@ -30,7 +30,7 @@ GET  /reports/{ticket_id}/versions        -> verify draft/final version history
 |---|---|---|
 | POST | `/events/upload` | Normalizes one recall payload, performs in-memory event dedupe, and creates/reuses the durable ticket row. Returns `event_id`, `duplicated`, and `ticket_id`. Does not run the workflow. |
 | POST | `/events/collect` | Manually triggers openFDA collection and creates/reuses tickets for fetched recall records. Does not run the workflow. |
-| GET | `/events/latest?limit=20` | Returns recent tickets by `created_at` as the current "latest events" feed: `ticket_id`, event/product fields, status, workflow stage, and created timestamp. |
+| GET | `/events/latest?limit=20` | Returns recent enriched event feed items. Includes `ticket_id`, `source`, `is_duplicate`, `product_description`, `recall_reason`, `can_run` (calculated via `can_rerun_workflow` policy), and nested `raw_event_data`. |
 
 ## Tickets & Orchestration
 
@@ -171,7 +171,6 @@ Chat answer modes:
 
 ## Known Gaps
 
-- `GET /approval/pending` queries `Approval` rows with `status="pending"`, but no current workflow path persists an `Approval` row until a decision is made (`approve`/`reject` write `approved`/`rejected` directly). In practice this endpoint likely returns an empty list against real data; needs a design fix (e.g. persist a pending row when a ticket is routed to HITL) tracked separately from the `ticket_id`/`internal_id` field-naming fix above.
 - Review payloads still expose flattened `draft_text`; structured report sections are available from `/reports/{ticket_id}` and `/reports/{ticket_id}/versions`.
 - `/events/upload` and `/events/collect` only create tickets. The frontend must call `/tickets/{ticket_id}/run` explicitly.
 - `/tickets/{ticket_id}/run`, chat retrieval, and LLM-backed draft/report generation require Milvus/OpenAI-compatible settings to be configured.

@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models.ticket import Ticket
 from app.event.normalizer import normalize_event
-from app.schemas.io import EventUploadRequest, EventUploadResponse
+from app.schemas.io import EventUploadRequest, EventUploadResponse, EventFeedItem, EventLatestResponse
 
 from app.event.dedup import check_and_save_event, release_event
 from app.orchestration.tickets import get_or_create_ticket_record
 from app.event.collector import periodic_collect
-
+from app.workflow.state import can_rerun_workflow
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -154,6 +154,9 @@ async def get_latest_events(
     최근 수집된 이벤트 목록 조회.
     티켓 생성 시간 기준 최신순으로 반환.
     """
+
+    total_ticket_count = db.query(Ticket).count()
+
     tickets = (
         db.query(Ticket)
         .order_by(Ticket.created_at.desc())
@@ -161,16 +164,36 @@ async def get_latest_events(
         .all()
     )
 
-    return [
-        {
-            "ticket_id": ticket.ticket_id,
-            "event_type": ticket.event_type,
-            "drug_name": ticket.drug_name,
-            "ndc": ticket.ndc,
-            "classification": ticket.classification,
-            "status": ticket.status,
-            "workflow_stage": ticket.workflow_stage,
-            "created_at": ticket.created_at,
-        }
-        for ticket in tickets
-    ]
+    feed_items = []
+    for ticket in tickets:
+        # 1. 상태값을 문자열로 안전하게 추출
+        status_val = ticket.status.value if hasattr(ticket.status, "value") else ticket.status
+        
+        # 2. 오케스트레이터의 공통 정책 함수를 그대로 재사용! (핵심)
+        can_run = can_rerun_workflow(status_val)
+
+        feed_items.append(
+            EventFeedItem(
+                event_id=ticket.openfda_id or f"fallback-{ticket.ticket_id}",
+                source="openFDA" if ticket.openfda_id else "manual_upload",
+                is_duplicate=None, 
+                product_description=ticket.product_description or ticket.drug_name,
+                recall_reason=ticket.reason_for_recall,
+                ticket_id=ticket.ticket_id,
+                
+                # 3. 계산된 값을 프론트엔드에 전달
+                can_run=can_run,
+                
+                raw_event_data={
+                    "drug_name": ticket.drug_name,
+                    "ndc": ticket.ndc,
+                    "classification": getattr(ticket.classification, "value", ticket.classification) if ticket.classification else None,
+                    "event_type": getattr(ticket.event_type, "value", ticket.event_type) if ticket.event_type else None,
+                    "status": status_val,
+                    "workflow_stage": ticket.workflow_stage,
+                },
+                created_at=ticket.created_at
+            )
+        )
+
+    return EventLatestResponse(events=feed_items, total_count=total_ticket_count)
