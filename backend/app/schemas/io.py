@@ -206,7 +206,7 @@ class EvalResult(BaseModel):
 class EventFeedItem(BaseModel):
     event_id: str
     source: str
-    is_duplicate: bool
+    is_duplicate: Optional[bool] = None
     product_description: str
     recall_reason: Optional[str] = None
     ticket_id: Optional[str] = None
