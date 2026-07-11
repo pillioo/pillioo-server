@@ -121,7 +121,7 @@ Chat answer modes:
 | Method | Path | Description |
 |---|---|---|
 | GET | `/inventory/impact/{ticket_id}` | Recomputes inventory match, impact summary, and quality check for a ticket's drug/NDC/lot. Useful for a ticket detail "inventory impact" panel. |
-| GET | `/dashboard/summary` | Returns aggregate ticket counts by status and review type plus a small recent-ticket list. This is a basic dashboard summary, not a full analytics API. |
+| GET | `/dashboard/summary` | Returns aggregate ticket counts (`by_status`, `by_review_type`, `pending_approvals`, `workflow_failed`, `high_priority`, `today_created`, `evidence_review_pending`) plus operational queues for pharmacist/ops triage: `urgent_tickets`, `recent_failures`, `recent_tickets`, `evidence_queue` (evidence-review tickets with weak sources/failure reasons/citation readiness from the latest evidence snapshot), `review_approval_queue` (pending approvals, draft_v2-without-final_v1 revision candidates, safety-check-failed tickets), and `inventory_impact` (impacted ticket counts by match type, high-impact ticket list). |
 
 ## Audit & Health
 
@@ -137,4 +137,4 @@ Chat answer modes:
 - `/events/upload` and `/events/collect` only create tickets. The frontend must call `/tickets/{ticket_id}/run` explicitly.
 - `/tickets/{ticket_id}/run`, chat retrieval, and LLM-backed draft/report generation require Milvus/OpenAI-compatible settings to be configured.
 - `revise-with-llm` requires the latest report version to contain `report_json`; legacy rows with only `report_text` return `NO_STRUCTURED_REPORT`.
-- The structured report migration should be verified with `alembic upgrade head` against a real Postgres instance before deployment.
+- `/events/collect` currently fetches openFDA records but `tickets_created` reports 0 even when records are fetched; ticket creation from collected events needs investigation.
