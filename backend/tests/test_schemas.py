@@ -516,6 +516,10 @@ class TestTicketState:
             output_json={"matched": True},
             timestamp=NOW,
             duration_ms=120,
+            title="Inventory Match",
+            message="Inventory Match completed successfully.",
+            severity="info",
+            status="succeeded",
         )
         state.audit_trace.append(entry)
         assert len(state.audit_trace) == 1

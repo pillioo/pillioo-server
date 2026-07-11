@@ -13,6 +13,60 @@ from app.schemas.common import WorkflowStep
 from app.schemas.workflow import AuditLogEntry
 
 
+# Human-readable titles per step -- falls back to a title-cased step_name
+# for any step not listed here (defensive default, not meant to be hit).
+_STEP_TITLES: dict[str, str] = {
+    WorkflowStep.EVENT_NORMALIZED.value: "Event Normalized",
+    WorkflowStep.TICKET_CREATED.value: "Ticket Created",
+    WorkflowStep.INVENTORY_MATCH.value: "Inventory Match",
+    WorkflowStep.IMPACT_ASSESSMENT.value: "Impact Assessment",
+    WorkflowStep.EVIDENCE_ROUTING.value: "Evidence Routing",
+    WorkflowStep.EVIDENCE_RETRIEVAL.value: "Evidence Retrieval",
+    WorkflowStep.SUFFICIENCY_CHECK.value: "Sufficiency Check",
+    WorkflowStep.DRAFT_GENERATION.value: "Draft Generation",
+    WorkflowStep.SAFETY_CHECK.value: "Safety Check",
+    WorkflowStep.INVENTORY_QUALITY_CHECK.value: "Inventory Quality Check",
+    WorkflowStep.RAG_QUALITY_CHECK.value: "RAG Quality Check",
+    WorkflowStep.POLICY_AGGREGATION.value: "Policy Aggregation",
+    WorkflowStep.HITL_ROUTED.value: "Routed for Review",
+    WorkflowStep.APPROVAL_DECISION.value: "Approval Decision",
+}
+
+# status -> severity, same status vocabulary already used by
+# app/review/ticket_detail.py's per-step "steps" array (output_json's
+# "step_status" key), so the two views of the same data stay consistent.
+_STATUS_SEVERITY: dict[str, str] = {
+    "succeeded": "info",
+    "failed": "error",
+    "skipped": "warning",
+}
+
+
+def derive_display_fields(step_name: str, output_json: dict) -> dict:
+    """
+    Derives frontend-timeline-friendly title/message/severity/status from a
+    raw audit log row, without needing per-step bespoke logic beyond the
+    title lookup and the existing step_status/error_message/reason
+    convention (see app/review/ticket_detail.py for the sibling usage of
+    that same convention).
+    """
+    output = output_json or {}
+    status = output.get("step_status", "succeeded")
+    title = _STEP_TITLES.get(step_name, step_name.replace("_", " ").title())
+    severity = _STATUS_SEVERITY.get(status, "info")
+
+    if status == "failed":
+        reason = output.get("error_message")
+        message = f"{title} failed: {reason}" if reason else f"{title} failed."
+    elif status == "skipped":
+        reason = output.get("reason")
+        message = f"{title} skipped: {reason}" if reason else f"{title} skipped."
+    else:
+        message = f"{title} completed successfully."
+
+    return {"title": title, "message": message, "severity": severity, "status": status}
+
+
 def write_audit_log(
     db: Session,
     ticket_id: int,
@@ -91,10 +145,14 @@ def get_audit_trace(db: Session, ticket_id: int) -> list[AuditLogEntry]:
             }
         ]
     """
+    # AuditLog has no `timestamp` column (only created_at/updated_at via
+    # TimeStampedModel) -- ordering by AuditLog.timestamp raised
+    # AttributeError on every call. No test caught this because there was
+    # no coverage at all for get_audit_trace / GET /audit/{ticket_id}.
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.ticket_id == ticket_id)
-        .order_by(AuditLog.timestamp.asc())
+        .order_by(AuditLog.created_at.asc())
         .all()
     )
 
@@ -106,6 +164,7 @@ def get_audit_trace(db: Session, ticket_id: int) -> list[AuditLogEntry]:
             output_json=log.output_json,
             timestamp=log.created_at,
             duration_ms=log.duration_ms,
+            **derive_display_fields(log.step_name, log.output_json),
         )
         for log in logs
     ]

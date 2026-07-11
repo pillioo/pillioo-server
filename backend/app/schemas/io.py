@@ -99,8 +99,11 @@ class TicketDetailResponse(BaseModel):
 
 
 class PendingApprovalItem(BaseModel):
+    # public string id (e.g. "T-001"), consistent with every other endpoint
+    # in app/review/router.py. The internal integer FK previously lived here
+    # under this same field name -- see internal_id below.
     ticket_id: str
-    public_ticket_id: Optional[str] = None
+    internal_id: int
     drug_name: str
     recall_number: Optional[str] = None
     classification: Optional[Classification] = None
@@ -108,6 +111,32 @@ class PendingApprovalItem(BaseModel):
     priority: Optional[Priority] = None
     approval_status: Optional[str] = None
     created_at: datetime
+
+
+class TicketListItem(BaseModel):
+    ticket_id: str
+    status: TicketStatus
+    workflow_stage: str
+    drug_name: str
+    ndc: str
+    lot: Optional[str] = None
+    classification: Optional[Classification] = None
+    recall_number: Optional[str] = None
+    priority: Optional[str] = None
+    review_type: Optional[str] = None
+    created_at: datetime
+    # Ticket.updated_at has onupdate=func.now() but no insert-time default
+    # (see app/db/base.py TimeStampedModel), so it stays NULL in the DB until
+    # a ticket's first UPDATE (e.g. the first workflow run). A ticket that
+    # was only ever uploaded, never run, legitimately has no updated_at yet.
+    updated_at: Optional[datetime] = None
+
+
+class TicketListResponse(BaseModel):
+    items: list[TicketListItem]
+    total: int = Field(..., ge=0, description="Total matching tickets, ignoring limit/offset")
+    limit: int
+    offset: int
 
 
 class ApproveResponse(BaseModel):

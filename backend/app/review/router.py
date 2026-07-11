@@ -16,10 +16,13 @@ Endpoints:
     GET  /reports/{ticket_id}            -> latest report version
 """
 
-from app.schemas.io import PendingApprovalItem
+from typing import Optional
+
+from app.schemas.io import PendingApprovalItem, TicketListResponse
 from app.schemas.report import ReportVersion
 from app.schemas.workflow import AuditLogEntry
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.audit.logger import get_audit_trace
@@ -29,9 +32,9 @@ from app.db.session import get_db
 from app.report.versioning import get_latest_report, get_report_versions
 from app.review.approval import handle_approve, handle_reject, handle_revise, handle_system_revise
 from app.review.errors import ReviewError, raise_review_error
-from app.review.tickets import get_ticket_by_public_id, get_ticket_by_recall_number
+from app.review.tickets import get_ticket_by_public_id
 from app.review.ticket_detail import build_ticket_detail
-from app.schemas.common import ApprovalStatus
+from app.schemas.common import ApprovalStatus, Priority, ReviewType
 from app.schemas.io import TicketDetailResponse
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest, SystemReviseRequest
 
@@ -46,23 +49,82 @@ router = APIRouter(tags=["review"])
 # Review Workspace
 # ──────────────────────────────────────────────
 
-@router.get("/tickets")
-async def find_ticket_by_recall_number(
-    recall_number: str,
+@router.get("/tickets", response_model=TicketListResponse)
+async def list_tickets(
+    status: Optional[TicketStatus] = None,
+    review_type: Optional[ReviewType] = None,
+    priority: Optional[Priority] = None,
+    recall_number: Optional[str] = None,
+    q: Optional[str] = Query(
+        default=None,
+        min_length=1,
+        description="Free-text search over drug_name, recall_number, and ticket_id",
+    ),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """
-    recall_number로 ticket_id를 찾기 위한 조회용 엔드포인트 (Swagger 테스트 편의용).
-    같은 recall_number로 여러 번 업로드해도 티켓은 하나만 생성되므로 가장 최근 건을 반환한다.
+    대시보드/큐 화면용 티켓 목록 조회. status/review_type/priority/recall_number로
+    필터링하고, q로 drug_name/recall_number/ticket_id 자유 검색, limit/offset으로
+    페이지네이션한다. 최신순(created_at desc) 정렬.
+
+    recall_number로 티켓 하나만 찾고 싶으면 `?recall_number=...`만 넘기면 됨
+    (기존 단건 조회 엔드포인트를 대체 -- 이제 items 배열로 감싸서 반환).
     """
-    ticket = get_ticket_by_recall_number(db, recall_number)
-    return {
-        "ticket_id": ticket.ticket_id,
-        "recall_number": ticket.recall_number,
-        "status": ticket.status,
-        "workflow_stage": ticket.workflow_stage,
-        "created_at": ticket.created_at,
-    }
+    query = db.query(Ticket)
+
+    if status is not None:
+        query = query.filter(Ticket.status == status.value)
+    if review_type is not None:
+        query = query.filter(Ticket.review_type == review_type.value)
+    if priority is not None:
+        query = query.filter(Ticket.priority == priority.value)
+    if recall_number is not None:
+        query = query.filter(Ticket.recall_number == recall_number)
+    if q is not None:
+        pattern = f"%{q}%"
+        query = query.filter(
+            or_(
+                Ticket.drug_name.ilike(pattern),
+                Ticket.recall_number.ilike(pattern),
+                Ticket.ticket_id.ilike(pattern),
+            )
+        )
+
+    total = query.count()
+    tickets = (
+        # id as a secondary sort key: created_at alone isn't a strict tiebreaker
+        # (e.g. sqlite's CURRENT_TIMESTAMP has 1s resolution, so tickets created
+        # within the same second would otherwise sort arbitrarily).
+        query.order_by(Ticket.created_at.desc(), Ticket.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return TicketListResponse(
+        items=[
+            {
+                "ticket_id": t.ticket_id,
+                "status": t.status,
+                "workflow_stage": t.workflow_stage,
+                "drug_name": t.drug_name,
+                "ndc": t.ndc,
+                "lot": t.lot,
+                "classification": t.classification,
+                "recall_number": t.recall_number,
+                "priority": t.priority,
+                "review_type": t.review_type,
+                "created_at": t.created_at,
+                "updated_at": t.updated_at,
+            }
+            for t in tickets
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/tickets/{ticket_id}", response_model=TicketDetailResponse)
@@ -124,6 +186,7 @@ async def get_pending_approvals(
 ):
     pending = (
         db.query(Approval)
+        .join(Ticket, Approval.ticket_id == Ticket.id)
         .filter(Approval.status == ApprovalStatus.PENDING.value)
         .order_by(Approval.created_at.asc())
         .all()
@@ -131,13 +194,13 @@ async def get_pending_approvals(
 
     return [
         {
-            "ticket_id": a.ticket_id,
-            "public_ticket_id": a.ticket.ticket_id if a.ticket else None,
-            "drug_name": a.ticket.drug_name if a.ticket else "",
-            "recall_number": a.ticket.recall_number if a.ticket else None,
-            "classification": a.ticket.classification if a.ticket else None,
-            "review_type": a.ticket.review_type if a.ticket else None,
-            "priority": a.ticket.priority if a.ticket else None,
+            "ticket_id": a.ticket.ticket_id,
+            "internal_id": a.ticket_id,
+            "drug_name": a.ticket.drug_name,
+            "recall_number": a.ticket.recall_number,
+            "classification": a.ticket.classification,
+            "review_type": a.ticket.review_type,
+            "priority": a.ticket.priority,
             "approval_status": a.status,
             "created_at": a.created_at,
         }
