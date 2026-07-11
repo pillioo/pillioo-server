@@ -105,15 +105,11 @@ def lexical_overlap(query: str, chunk: EvidenceChunk) -> tuple[float, list[str]]
 
 
 def tokenize(value: str) -> set[str]:
-    terms = {
+    return {
         term
         for term in re.findall(r"[0-9A-Za-z가-힣]+", value.lower())
         if len(term) > 1 and term not in STOPWORDS
     }
-    compact = re.sub(r"[^0-9a-z가-힣]", "", value.lower())
-    if len(compact) > 1 and compact not in STOPWORDS:
-        terms.add(compact)
-    return terms
 
 
 def should_penalize_identifier_fallback(
