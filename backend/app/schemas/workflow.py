@@ -62,6 +62,14 @@ class AuditLogEntry(BaseModel):
     timestamp: datetime
     duration_ms: int = Field(..., ge=0)
 
+    # Display-friendly fields for a frontend timeline, derived from
+    # step_name/output_json (see app.audit.logger.derive_display_fields).
+    # Additive/backward-compatible -- input_json/output_json are unchanged.
+    title: str
+    message: str
+    severity: str  # "info" | "warning" | "error"
+    status: str  # "succeeded" | "failed" | "skipped"
+
 
 class TicketState(BaseModel):
     """Accumulated workflow state for a single ticket."""
