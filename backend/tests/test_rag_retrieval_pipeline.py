@@ -210,6 +210,82 @@ def test_reranker_boosts_identifier_matches_and_records_matched_identifiers() ->
     assert reranked.matched_identifiers["ndc"] == ["00641601441"]
 
 
+def test_reranker_boosts_lexical_overlap() -> None:
+    plan = EvidencePlan(event_type="recall", targets=[])
+    context = RetrievalContext(query="dexamethasone label mixup quarantine")
+    chunk = make_chunk(
+        score=0.5,
+        content="Dexamethasone recall notice describes a label mixup and quarantine review.",
+    )
+
+    [reranked] = MetadataAwareReranker().rerank([chunk], context=context, plan=plan)
+
+    assert reranked.rank_score > 0.5
+    assert "lexical_overlap" in reranked.rank_reasons
+    assert {"dexamethasone", "label", "mixup", "quarantine"} <= set(reranked.lexical_overlap_terms)
+    assert reranked.lexical_overlap_score > 0
+
+
+def test_reranker_penalizes_recall_notice_fallback_without_identifier_match() -> None:
+    plan = EvidencePlan(
+        event_type="recall",
+        targets=[EvidenceTarget("recall_notice", sections=["recall_notice"])],
+    )
+    context = RetrievalContext(
+        query="midazolam D-TEST-2026-001 recall notice",
+        recall_number="D-TEST-2026-001",
+        normalized_drug_name="midazolam",
+    )
+    wrong_notice = make_chunk(
+        score=0.8,
+        filter_level="section",
+        recall_number="D-798-2014",
+        normalized_drug_name="dexamethasone",
+        content="Dexamethasone recall notice D-798-2014.",
+    )
+
+    [reranked] = MetadataAwareReranker().rerank([wrong_notice], context=context, plan=plan)
+
+    assert "fallback_penalty" in reranked.rank_reasons
+    assert reranked.matched_identifiers == {}
+    assert reranked.rank_score < 0.8 + 0.05 + 0.08
+
+
+def test_reranker_promotes_identifier_match_over_wrong_recall_notice() -> None:
+    plan = EvidencePlan(
+        event_type="recall",
+        targets=[EvidenceTarget("recall_notice", sections=["recall_notice"])],
+    )
+    context = RetrievalContext(
+        query="dexamethasone D-798-2014 recall notice",
+        recall_number="D-798-2014",
+        normalized_drug_name="dexamethasone",
+    )
+    wrong = make_chunk(
+        chunk_id="wrong",
+        score=0.80,
+        filter_level="section",
+        recall_number="D-TEST-2026-001",
+        normalized_drug_name="midazolam",
+        content="Midazolam recall notice D-TEST-2026-001.",
+    )
+    right = make_chunk(
+        chunk_id="right",
+        score=0.65,
+        filter_level="strong_identifier_section",
+        recall_number="D-798-2014",
+        normalized_drug_name="dexamethasone",
+        content="Dexamethasone recall notice D-798-2014.",
+    )
+
+    reranked = MetadataAwareReranker().rerank([wrong, right], context=context, plan=plan)
+
+    assert reranked[0].chunk_id == "right"
+    assert "recall_number_match" in reranked[0].rank_reasons
+    assert "normalized_drug_name_match" in reranked[0].rank_reasons
+    assert "fallback_penalty" in reranked[1].rank_reasons
+
+
 def test_reranker_adds_rank_reasons_for_plain_match() -> None:
     plan = EvidencePlan(event_type="recall", targets=[])
     context = RetrievalContext()
@@ -325,7 +401,11 @@ def test_sufficiency_checker_returns_sufficient_when_required_types_found_non_we
         ],
     )
     chunks = [
-        make_chunk(document_type="recall_notice", filter_level="section"),
+        make_chunk(
+            document_type="recall_notice",
+            filter_level="section",
+            matched_identifiers={"recall_number": "D-1"},
+        ),
         make_chunk(document_type="policy", section="required_actions", filter_level="strong_identifier"),
     ]
 

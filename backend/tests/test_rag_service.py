@@ -170,7 +170,11 @@ def test_sufficiency_checker_reports_missing_required_document_type() -> None:
 def test_sufficiency_checker_flags_document_type_only_fallback_as_weak() -> None:
     plan = EvidencePlan(event_type="recall", targets=[EvidenceTarget("recall_notice"), EvidenceTarget("policy")])
     chunks = [
-        chunk(document_type="recall_notice", filter_level="strong_identifier"),
+        chunk(
+            document_type="recall_notice",
+            filter_level="strong_identifier",
+            matched_identifiers={"recall_number": "D-1"},
+        ),
         chunk(chunk_id="policy", document_type="policy", filter_level="document_type"),
     ]
 
@@ -201,7 +205,7 @@ def test_evidence_set_builder_keeps_every_required_type_beyond_top_k() -> None:
 def test_retrieval_service_orchestrates_retrieval_components() -> None:
     retriever = FakeRetriever(
         [
-            chunk(document_type="recall_notice", content_hash="same", score=0.7),
+            chunk(document_type="recall_notice", content_hash="same", score=0.7, recall_number="D-1"),
             chunk(chunk_id="dup", document_type="recall_notice", content_hash="same", score=0.6),
             chunk(chunk_id="policy", document_type="policy", section="evidence_requirements", content_hash="policy", score=0.65),
             chunk(chunk_id="sop", document_type="sop", section="procedure", content_hash="sop", score=0.64),
@@ -211,7 +215,7 @@ def test_retrieval_service_orchestrates_retrieval_components() -> None:
 
     result = service.retrieve(
         query="what evidence is required?",
-        context=RetrievalContext(event_type="recall"),
+        context=RetrievalContext(event_type="recall", recall_number="D-1"),
         top_k=3,
         filter_override='document_type == "recall_notice"',
     )
