@@ -61,3 +61,8 @@ class Ticket(TimeStampedModel):
         "ReportVersion",
         back_populates="ticket"
     )
+
+    evidence_snapshots = relationship(
+        "TicketEvidenceSnapshot",
+        back_populates="ticket"
+    )

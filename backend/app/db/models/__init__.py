@@ -3,3 +3,4 @@ from app.db.models.approval_model import Approval
 from app.db.models.audit_log_model import AuditLog
 from app.db.models.report_version_model import ReportVersion
 from app.db.models.chat_model import ChatSession, ChatMessage
+from app.db.models.evidence_snapshot_model import TicketEvidenceSnapshot
