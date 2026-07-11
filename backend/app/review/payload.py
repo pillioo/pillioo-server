@@ -58,16 +58,21 @@ def build_review_payload(state: TicketState) -> ReviewPayload:
         # 약사가 직접 재고 확인 필요
         match_result = state.inventory_result
         impact = state.impact_summary
+        matched_ndc = (
+            match_result.matched_rows[0].ndc
+            if match_result and match_result.matched_rows
+            else None
+        )
 
         return IdentityReviewPayload(
             ticket_id=state.ticket_id,
             approval_status=state.approval_status,
             summary=summary,
             identity_issue=IdentityIssue(
-                input_ndc=match_result.ndc if match_result else "",
-                matched_ndc=match_result.matched_ndc if match_result else None,
-                match_confidence=match_result.confidence if match_result else 0.0,
-                reason=match_result.match_reason if match_result else "",
+                input_ndc=state.event_normalized.ndc if state.event_normalized else "",
+                matched_ndc=matched_ndc,
+                match_confidence=match_result.match_confidence if match_result else 0.0,
+                reason=match_result.identity_review_reason if match_result else "",
             ),
             affected_departments=[
                 Department(d) for d in (impact.affected_departments if impact else [])
