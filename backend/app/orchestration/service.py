@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models.ticket import Ticket
 from app.orchestration.draft import LLMDraftGenerator
+from app.orchestration.report_grounding import (
+    affected_product_from_state,
+    evidence_summary_from_state,
+    inventory_impact_from_state,
+)
 from app.orchestration.steps import (
     evidence_gate_allows_draft,
     run_draft_step,
@@ -26,6 +31,7 @@ from app.rag.models import RetrievalContext
 from app.schemas.common import TicketStatus, WorkflowStep
 from app.schemas.event import EventNormalized
 from app.schemas.evidence import DraftCitation, EvidenceResult
+from app.schemas.report import DraftReport
 from app.schemas.workflow import TicketState, TrustChecks
 from app.workflow.state import WorkflowStage, can_rerun_workflow
 
@@ -48,7 +54,7 @@ class DraftGenerator(Protocol):
         *,
         state: TicketState,
         evidence_result: EvidenceResult,
-    ) -> tuple[str, list[DraftCitation]]:
+    ) -> DraftReport:
         ...
 
 
@@ -60,35 +66,41 @@ class OrchestrationResult:
 
 
 class SimpleDraftGenerator:
+    """Deterministic, non-LLM DraftGenerator used as a test/offline fallback.
+    Returns the same structured DraftReport shape as LLMDraftGenerator, just
+    with a fixed, templated narrative instead of a model-generated one."""
+
     def generate(
         self,
         *,
         state: TicketState,
         evidence_result: EvidenceResult,
-    ) -> tuple[str, list[DraftCitation]]:
+    ) -> DraftReport:
         drug_name = state.event_normalized.drug_name if state.event_normalized else "the affected drug"
         classification = state.classification.value if state.classification else "unclassified"
-        departments = []
-        if state.impact_summary:
-            departments = [department.value for department in state.impact_summary.affected_departments]
-        department_text = ", ".join(departments) if departments else "no affected departments"
+        event_type = state.event_type.value if state.event_type else "event"
 
-        draft_text = (
-            f"{drug_name} {classification} {state.event_type.value} notice. "
-            f"Affected departments: {department_text}. "
-            "Hold affected inventory for pharmacist review before further action."
-        )
-
+        recommended_action = "Hold affected inventory for pharmacist review before further action."
         citations = [
             DraftCitation(
                 source=citation.source,
                 section=citation.section,
                 score=citation.score,
-                sentence="Hold affected inventory for pharmacist review before further action.",
+                sentence=recommended_action,
             )
             for citation in evidence_result.citations[:3]
         ]
-        return draft_text, citations
+
+        return DraftReport(
+            title=f"{drug_name} {classification} {event_type} review draft",
+            summary=f"{drug_name} {classification} {event_type} notice.",
+            affected_product=affected_product_from_state(state),
+            event_classification=state.classification.value if state.classification else None,
+            inventory_impact=inventory_impact_from_state(state),
+            evidence_summary=evidence_summary_from_state(state),
+            recommended_review_action=recommended_action,
+            citations=citations,
+        )
 
 
 def run_ticket_workflow(

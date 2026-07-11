@@ -4,15 +4,16 @@ Review Router
 FastAPI router for pharmacist review workspace endpoints.
 
 Endpoints:
-    GET  /tickets/{ticket_id}            → consolidated ticket detail (status, steps, can_rerun)
-    GET  /tickets/{ticket_id}/review     → review payload (pharmacist screen)
-    GET  /approval/pending               → pending approval list
-    POST /approval/{ticket_id}/approve   → approve ticket
-    POST /approval/{ticket_id}/reject    → reject ticket
-    POST /approval/{ticket_id}/revise    → request revision
-    GET  /audit/{ticket_id}              → full audit trace
-    GET  /reports/{ticket_id}/versions   → all report versions
-    GET  /reports/{ticket_id}            → latest report version
+    GET  /tickets/{ticket_id}            -> consolidated ticket detail (status, steps, can_rerun)
+    GET  /tickets/{ticket_id}/review     -> review payload (pharmacist screen)
+    GET  /approval/pending               -> pending approval list
+    POST /approval/{ticket_id}/approve   -> approve ticket
+    POST /approval/{ticket_id}/reject    -> reject ticket
+    POST /approval/{ticket_id}/revise    -> request revision (pharmacist-edited draft)
+    POST /approval/{ticket_id}/revise-with-llm -> request revision (system-revised draft)
+    GET  /audit/{ticket_id}              -> full audit trace
+    GET  /reports/{ticket_id}/versions   -> all report versions
+    GET  /reports/{ticket_id}            -> latest report version
 """
 
 from app.schemas.io import PendingApprovalItem
@@ -26,13 +27,13 @@ from app.db.models.approval_model import Approval
 from app.db.models.ticket import Ticket
 from app.db.session import get_db
 from app.report.versioning import get_latest_report, get_report_versions
-from app.review.approval import handle_approve, handle_reject, handle_revise
+from app.review.approval import handle_approve, handle_reject, handle_revise, handle_system_revise
 from app.review.errors import ReviewError, raise_review_error
 from app.review.tickets import get_ticket_by_public_id, get_ticket_by_recall_number
 from app.review.ticket_detail import build_ticket_detail
 from app.schemas.common import ApprovalStatus
 from app.schemas.io import TicketDetailResponse
-from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest
+from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest, SystemReviseRequest
 
 from app.orchestration.state import ticket_to_state
 from app.review.payload import build_review_payload
@@ -156,7 +157,7 @@ async def approve_ticket(
 ):
     """
     약사 승인 처리.
-    승인 기록 저장 + final_v1 보고서 버전 저장.
+    승인 기록 저장 + 최신 draft를 그대로 freeze한 final_v1 보고서 버전 저장.
     한 티켓에 final_v1은 하나만 존재 가능.
     """
     # final_v1 중복 방지
@@ -186,14 +187,13 @@ async def approve_ticket(
             ReviewError.REPORT_NOT_FOUND,
             {"ticket_id": ticket_id}
         )
-    current_draft = latest.report_text
 
     return handle_approve(
         db=db,
         ticket=ticket,
         public_ticket_id=ticket.ticket_id,
         request=request,
-        current_draft=current_draft,
+        source_version=latest,
     )
 
 
@@ -223,7 +223,7 @@ async def revise_ticket(
     db: Session = Depends(get_db),
 ):
     """
-    약사 수정 요청 처리.
+    약사가 직접 수정한 초안 처리 (LLM 호출 없음).
     수정된 초안을 safety check 재실행 후 draft_v2 저장.
     재차단 문장 있으면 needs_action_review: True 반환.
     """
@@ -233,6 +233,45 @@ async def revise_ticket(
         ticket_id=ticket.id,
         public_ticket_id=ticket.ticket_id,
         request=request,
+    )
+
+
+@router.post("/approval/{ticket_id}/revise-with-llm")
+async def revise_ticket_with_llm(
+    ticket_id: str,
+    request: SystemReviseRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    시스템이 약사의 reviewer_comment를 반영해 최신 구조화 draft를 제한적으로
+    수정 (revise_draft_prompt). 최신 report_versions 레코드에 구조화 본문
+    (report_json)이 없으면 NO_STRUCTURED_REPORT 에러를 반환한다.
+    수정 후 safety check 재실행 -> 통과 시 draft_v2 저장.
+    """
+    ticket = get_ticket_by_public_id(db, ticket_id)
+
+    # Already-approved tickets are terminal (final_v1 is frozen and audited);
+    # block any further system-driven revision instead of silently appending
+    # another draft_v2 behind the pharmacist's back.
+    if ticket.status == TicketStatus.APPROVED.value:
+        raise_review_error(
+            ReviewError.INVALID_VERSION_TAG,
+            {"ticket_id": ticket_id, "reason": "Ticket already approved — cannot revise a finalized report"},
+        )
+
+    latest = get_latest_report(db=db, ticket_id=ticket.id)
+    if not latest:
+        raise_review_error(
+            ReviewError.REPORT_NOT_FOUND,
+            {"ticket_id": ticket_id}
+        )
+
+    return handle_system_revise(
+        db=db,
+        ticket=ticket,
+        public_ticket_id=ticket.ticket_id,
+        request=request,
+        latest_version=latest,
     )
 
 

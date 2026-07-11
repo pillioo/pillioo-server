@@ -11,9 +11,11 @@ from openai import OpenAI
 from scripts.rag.embedding.config import (
     DEFAULT_CHUNKS_PATH,
     DEFAULT_EMBEDDED_CHUNKS_PATH,
+    EMBEDDING_API_KEY,
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
+    OPENAI_EMBEDDING_BASE_URL,
 )
 from scripts.rag.embedding.io import append_jsonl, clean_output, read_jsonl
 from scripts.rag.embedding.validation import validate_optional_positive_int, validate_positive_int
@@ -108,7 +110,9 @@ def embed_chunks(
     if limit is not None:
         chunks = chunks[:limit]
 
-    client = OpenAI()
+    # Explicit kwargs (not bare OpenAI()) so this never inherits OPENAI_BASE_URL
+    # from the environment -- see scripts/rag/embedding/config.py.
+    client = OpenAI(api_key=EMBEDDING_API_KEY, base_url=OPENAI_EMBEDDING_BASE_URL)
     total = 0
     for batch in batched(chunks, batch_size):
         embedded_at = datetime.now(timezone.utc).isoformat()

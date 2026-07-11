@@ -19,5 +19,12 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM") or os.getenv("EMBEDDING_DIMENSION", "1536"))
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
 
+# Embeddings always call the real OpenAI API directly, never through
+# OPENAI_BASE_URL (a chat-completions gateway may not proxy /embeddings).
+# EMBEDDING_API_KEY takes priority over OPENAI_API_KEY since the latter may
+# have been repurposed as a gateway key when OPENAI_BASE_URL is set.
+OPENAI_EMBEDDING_BASE_URL = "https://api.openai.com/v1"
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv("OPENAI_API_KEY")
+
 MILVUS_URI = os.getenv("MILVUS_URI", "http://localhost:19530")
 MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "evidence_chunks")

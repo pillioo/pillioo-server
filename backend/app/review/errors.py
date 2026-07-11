@@ -20,6 +20,7 @@ class ReviewError:
     INVALID_REVIEW_TYPE = "INVALID_REVIEW_TYPE"
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
     INVALID_VERSION_TAG = "INVALID_VERSION_TAG"
+    NO_STRUCTURED_REPORT = "NO_STRUCTURED_REPORT"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
 
 
@@ -30,6 +31,7 @@ ERROR_MESSAGES = {
     ReviewError.INVALID_REVIEW_TYPE: "Invalid review type",
     ReviewError.APPROVAL_REQUIRED: "Pharmacist approval required",
     ReviewError.INVALID_VERSION_TAG: "Invalid report version",
+    ReviewError.NO_STRUCTURED_REPORT: "Latest report version has no structured report body to revise",
     ReviewError.INTERNAL_SERVER_ERROR: "Internal server error",
 }
 
@@ -40,6 +42,7 @@ STATUS_CODES = {
     ReviewError.INVALID_REVIEW_TYPE: 422,
     ReviewError.APPROVAL_REQUIRED: 403,
     ReviewError.INVALID_VERSION_TAG: 422,
+    ReviewError.NO_STRUCTURED_REPORT: 422,
     ReviewError.INTERNAL_SERVER_ERROR: 500,
 }
 

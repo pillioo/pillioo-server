@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.db.models.ticket import Ticket
 from app.event.normalizer import normalize_event
 from app.schemas.io import EventUploadRequest, EventUploadResponse
 
@@ -141,10 +142,8 @@ async def trigger_openfda_collection(db: Session = Depends(get_db)):
         "summary": processed_summary
     }
 
-from app.db.session import get_db
-from app.db.models.ticket import Ticket
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+
+
 
 @router.get("/latest")
 async def get_latest_events(

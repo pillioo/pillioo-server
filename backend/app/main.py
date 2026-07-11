@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     
 
 # lifespan 매니저를 탑재하여 FastAPI 앱 초기화
-app = FastAPI(title="P5 Platform MVP", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="P5 Platform MVP", version="0.1.0", lifespan=lifespan, debug=True)
 
 # CORS 설정
 app.add_middleware(

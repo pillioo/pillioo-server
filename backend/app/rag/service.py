@@ -5,6 +5,7 @@ from typing import Any
 
 from openai import OpenAI
 
+from app.core.llm_client import embedding_client_kwargs
 from app.rag.filters import MetadataFilterBuilder
 from app.rag.models import EvidenceResult, RetrievalContext
 from app.rag.reranker import MetadataAwareReranker
@@ -16,7 +17,9 @@ from app.rag.sufficiency import SufficiencyChecker
 
 class OpenAIQueryEmbedder:
     def __init__(self, *, model: str) -> None:
-        self.client = OpenAI()
+        # Explicit kwargs (not bare OpenAI()) so this never inherits
+        # OPENAI_BASE_URL from the environment -- see embedding_client_kwargs().
+        self.client = OpenAI(**embedding_client_kwargs())
         self.model = model
 
     def embed(self, query: str) -> list[float]:

@@ -10,6 +10,7 @@ from app.schemas.common import Classification, Department, EventType, Priority
 from app.schemas.event import EventNormalized
 from app.schemas.evidence import Citation, EvidenceChunk, EvidenceResult
 from app.schemas.inventory import ImpactSummary
+from app.schemas.report import DraftReport
 from app.schemas.workflow import TicketState
 
 
@@ -94,13 +95,13 @@ class FakeOpenAIClient:
 def test_llm_draft_generator_satisfies_draft_generator_protocol() -> None:
     generator: DraftGenerator = LLMDraftGenerator(
         model="test-model",
-        client=FakeOpenAIClient({"draft_text": "x", "citations": []}),
+        client=FakeOpenAIClient({"title": "t", "summary": "x", "recommended_review_action": "review"}),
     )
     assert hasattr(generator, "generate")
     result = generator.generate(state=state(), evidence_result=EvidenceResult(top_chunks=[], citations=[]))
-    draft_text, citations = result
-    assert isinstance(draft_text, str)
-    assert isinstance(citations, list)
+    assert isinstance(result, DraftReport)
+    assert isinstance(result.summary, str)
+    assert isinstance(result.citations, list)
 
 
 def test_llm_draft_generator_resolves_citations_against_real_evidence_scores() -> None:
@@ -110,7 +111,9 @@ def test_llm_draft_generator_resolves_citations_against_real_evidence_scores() -
     )
     fake_client = FakeOpenAIClient(
         {
-            "draft_text": "Midazolam lots are recalled. Quarantine affected lots pending pharmacist review.",
+            "title": "Midazolam recall review",
+            "summary": "Midazolam lots are recalled. Quarantine affected lots pending pharmacist review.",
+            "recommended_review_action": "Pharmacist review required before further action.",
             "citations": [
                 {
                     "source": "recall_sop.md",
@@ -122,15 +125,19 @@ def test_llm_draft_generator_resolves_citations_against_real_evidence_scores() -
     )
     generator = LLMDraftGenerator(model="test-model", client=fake_client)
 
-    draft_text, citations = generator.generate(state=state(), evidence_result=evidence)
+    report = generator.generate(state=state(), evidence_result=evidence)
 
-    assert draft_text == "Midazolam lots are recalled. Quarantine affected lots pending pharmacist review."
-    assert len(citations) == 1
-    assert citations[0].source == "recall_sop.md"
-    assert citations[0].section == "quarantine_procedure"
+    assert report.summary == "Midazolam lots are recalled. Quarantine affected lots pending pharmacist review."
+    assert len(report.citations) == 1
+    assert report.citations[0].source == "recall_sop.md"
+    assert report.citations[0].section == "quarantine_procedure"
     # score must come from the real evidence citation, never from the model's own output.
-    assert citations[0].score == 0.9
-    assert citations[0].sentence == "Quarantine affected lots pending pharmacist review."
+    assert report.citations[0].score == 0.9
+    assert report.citations[0].sentence == "Quarantine affected lots pending pharmacist review."
+    # Ground-truth fields must come from TicketState, not the model payload.
+    assert report.affected_product.drug_name == "midazolam"
+    assert report.inventory_impact.total_quantity == 5
+    assert report.inventory_impact.affected_departments == ["ICU"]
 
     call = fake_client.completions.calls[0]
     assert call["model"] == "test-model"
@@ -145,39 +152,59 @@ def test_llm_draft_generator_drops_hallucinated_citation_and_falls_back_to_real_
     )
     fake_client = FakeOpenAIClient(
         {
-            "draft_text": "Please review the affected midazolam lots.",
+            "title": "Midazolam recall review",
+            "summary": "Please review the affected midazolam lots.",
+            "recommended_review_action": "Pharmacist review required.",
             "citations": [{"source": "made_up_policy.md", "section": "nonexistent", "sentence": "fabricated"}],
         }
     )
     generator = LLMDraftGenerator(model="test-model", client=fake_client)
 
-    draft_text, citations = generator.generate(state=state(), evidence_result=evidence)
+    report = generator.generate(state=state(), evidence_result=evidence)
 
-    assert draft_text == "Please review the affected midazolam lots."
-    assert all(citation.source != "made_up_policy.md" for citation in citations)
-    # Evidence exists, so draft_citations must not come back empty.
-    assert len(citations) == 1
-    assert citations[0].source == "recall_sop.md"
-    assert citations[0].score == 0.9
+    assert report.summary == "Please review the affected midazolam lots."
+    assert all(citation.source != "made_up_policy.md" for citation in report.citations)
+    # Evidence exists, so citations must not come back empty.
+    assert len(report.citations) == 1
+    assert report.citations[0].source == "recall_sop.md"
+    assert report.citations[0].score == 0.9
 
 
 def test_llm_draft_generator_returns_empty_citations_without_crashing_when_no_evidence() -> None:
     evidence = EvidenceResult(top_chunks=[], citations=[])
-    fake_client = FakeOpenAIClient({"draft_text": "should not be used", "citations": []})
+    fake_client = FakeOpenAIClient({"title": "t", "summary": "should not be used", "recommended_review_action": "r"})
     generator = LLMDraftGenerator(model="test-model", client=fake_client)
 
-    draft_text, citations = generator.generate(state=state(), evidence_result=evidence)
+    report = generator.generate(state=state(), evidence_result=evidence)
 
-    assert citations == []
-    assert isinstance(draft_text, str)
-    assert draft_text
+    assert report.citations == []
+    assert isinstance(report.summary, str)
+    assert report.summary
+    assert report.limitations
     # Nothing to ground a draft on -> the model must not even be called.
     assert fake_client.completions.calls == []
 
 
+def test_draft_v1_prompt_never_uses_definitive_action_language() -> None:
+    """draft_v1 style rule: never emit directive commands like 'dispose
+    immediately' -- the fallback/default recommended action must use
+    review-request phrasing instead."""
+    evidence = EvidenceResult(top_chunks=[], citations=[])
+    generator = LLMDraftGenerator(model="test-model", client=FakeOpenAIClient({}))
+
+    report = generator.generate(state=state(), evidence_result=evidence)
+
+    banned_phrases = ["dispose immediately", "administer an alternative", "replace with another medication"]
+    lowered = report.recommended_review_action.lower()
+    assert not any(phrase in lowered for phrase in banned_phrases)
+    assert "review" in lowered
+
+
 def test_simple_draft_generator_remains_available_as_deterministic_test_fallback() -> None:
-    draft_text, citations = SimpleDraftGenerator().generate(
+    report = SimpleDraftGenerator().generate(
         state=state(), evidence_result=EvidenceResult(top_chunks=[], citations=[])
     )
-    assert isinstance(draft_text, str) and draft_text
-    assert citations == []
+    assert isinstance(report, DraftReport)
+    assert report.summary
+    assert report.citations == []
+    assert report.affected_product.drug_name == "midazolam"
