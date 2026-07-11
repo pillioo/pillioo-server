@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.db.models.chat_model import ChatMessage
 from app.schemas.workflow import TicketState
@@ -25,8 +25,6 @@ class ChatPlan:
     answer_mode: str
     target_profile: str
     retrieved_evidence_scope: str
-    target_document_types: list[str] = field(default_factory=list)
-    target_sections: list[str] = field(default_factory=list)
 
 
 def build_chat_plan(
@@ -49,15 +47,16 @@ def build_chat_plan(
         answer_mode=answer_mode,
         target_profile=target_profile,
         retrieved_evidence_scope=retrieved_evidence_scope_for_profile(target_profile),
-        target_document_types=target_document_types_for_profile(target_profile),
-        target_sections=target_sections_for_profile(target_profile),
     )
 
 
 def classify_intent(user_query: str) -> str:
     query = user_query.casefold()
 
-    if _contains_any(query, ["부족", "missing", "weak", "sufficient", "insufficient", "evidence gap", "근거 부족"]):
+    if _contains_any(
+        query,
+        ["missing", "weak", "sufficient", "insufficient", "evidence gap", "근거 부족", "뭐가 부족", "무엇이 부족"],
+    ):
         return EVIDENCE_GAP
     if _contains_any(query, ["왜", "why", "review", "routed", "route", "routing", "검토", "리뷰"]):
         return WORKFLOW_EXPLANATION
@@ -128,26 +127,6 @@ def build_standalone_query(
         parts.append(intent_terms)
     parts.append(user_query.strip())
     return _dedupe_words(" ".join(parts))
-
-
-def target_document_types_for_profile(target_profile: str) -> list[str]:
-    return {
-        "recall_action": ["recall_notice", "policy", "sop"],
-        "label_safety": ["label", "policy", "sop"],
-        "shortage_handling": ["policy", "sop", "label"],
-        "workflow_explanation": ["recall_notice", "label", "policy", "sop"],
-        "evidence_gap": [],
-    }.get(target_profile, [])
-
-
-def target_sections_for_profile(target_profile: str) -> list[str]:
-    return {
-        "recall_action": ["recall_notice", "required_actions", "procedure"],
-        "label_safety": ["warnings", "contraindications", "boxed_warning", "safety_controls"],
-        "shortage_handling": ["required_actions", "procedure", "escalation_criteria", "drug_interactions"],
-        "workflow_explanation": ["recall_notice", "warnings", "review_routing_rules", "review_routing", "evidence_requirements"],
-        "evidence_gap": [],
-    }.get(target_profile, [])
 
 
 def retrieved_evidence_scope_for_profile(target_profile: str) -> str:
