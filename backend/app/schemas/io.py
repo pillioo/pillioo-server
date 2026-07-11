@@ -158,6 +158,13 @@ class ChatResponse(BaseModel):
     session_id: str
     answer: str
     sources: list[Citation] = Field(default_factory=list)
+    intent: Optional[str] = None
+    standalone_query: Optional[str] = None
+    answer_mode: Optional[str] = None
+    target_profile: Optional[str] = None
+    evidence_status: Optional[str] = None
+    retrieved_evidence_scope: Optional[str] = None
+    answer_support_level: Optional[str] = None
 
 
 class HealthCheckResponse(BaseModel):

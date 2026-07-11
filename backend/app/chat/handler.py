@@ -18,6 +18,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.llm_client import build_llm_client
+from app.chat.planner import (
+    HYBRID,
+    RETRIEVAL_REQUIRED,
+    TICKET_STATE_ONLY,
+    build_chat_plan,
+)
 from app.db.models.chat_model import ChatSession, ChatMessage
 from app.orchestration.retrieval_identity import resolve_retrieval_drug_name
 from app.orchestration.state import ticket_to_state
@@ -133,20 +139,78 @@ def build_chat_history_context(messages: list[ChatMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
 
 
-def build_ticket_state_summary(state: TicketState) -> str:
+def build_ticket_state_summary(state: TicketState, workflow_stage: str | None = None) -> str:
     """
     Summarizes routing-relevant TicketState fields so questions like
     "why was this routed this way?" can be answered without RAG.
     """
+    event = state.event_normalized
+    sufficiency = state.sufficiency_check
+    impact = state.impact_summary
+    inventory = state.inventory_result
     lines = [
+        f"ticket_id: {state.ticket_id}",
+        f"event_type: {state.event_type.value if state.event_type else 'unknown'}",
+        f"drug_name: {event.drug_name if event else 'unknown'}",
+        f"classification: {state.classification.value if state.classification else 'unknown'}",
+        f"ndc: {event.ndc if event else 'unknown'}",
+        f"lot: {event.lot if event and event.lot else 'unknown'}",
+        f"recall_number: {event.recall_number if event and event.recall_number else 'unknown'}",
         f"status: {state.status.value if state.status else 'unknown'}",
+        f"workflow_stage: {workflow_stage or 'unknown'}",
         f"review_type: {state.review_type.value if state.review_type else 'not yet determined'}",
     ]
+    if inventory:
+        lines.append(
+            "inventory_result: "
+            f"matched={inventory.matched}, match_type={inventory.match_type.value}, "
+            f"match_confidence={inventory.match_confidence}, "
+            f"needs_identity_review={inventory.needs_identity_review}"
+        )
+    else:
+        lines.append("inventory_result: not yet run")
+    if impact:
+        departments = ", ".join(dept.value for dept in impact.affected_departments) or "none"
+        breakdown = ", ".join(f"{dept.value}:{qty}" for dept, qty in impact.department_breakdown.items()) or "none"
+        lines.append(
+            "inventory_impact: "
+            f"affected_departments={departments}, total_quantity={impact.total_quantity}, "
+            f"department_breakdown={breakdown}, priority={impact.priority.value}, "
+            f"urgent={impact.urgent}, urgent_reason={impact.urgent_reason or 'none'}"
+        )
+    else:
+        lines.append("inventory_impact: not yet run")
+    if sufficiency:
+        lines.extend(
+            [
+                f"evidence_status: {sufficiency.evidence_status.value}",
+                f"coverage_score: {sufficiency.coverage_score}",
+                "missing_sources: "
+                + (", ".join(source.value for source in sufficiency.missing_sources) or "none"),
+                "weak_sources: "
+                + (", ".join(source.value for source in sufficiency.weak_sources) or "none"),
+                f"failure_reasons: {sufficiency.failure_reasons or 'none'}",
+                f"citations_ready: {sufficiency.citations_ready}",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "evidence_status: not yet run",
+                "coverage_score: unknown",
+                "missing_sources: unknown",
+                "weak_sources: unknown",
+                "failure_reasons: unknown",
+                "citations_ready: unknown",
+            ]
+        )
     if state.policy_decision:
         reasons = "; ".join(state.policy_decision.reasons) if state.policy_decision.reasons else "none"
         lines.append(f"policy_decision: {state.policy_decision.decision.value} (reasons: {reasons})")
+        lines.append(f"policy_routing_reason: {reasons}")
     else:
         lines.append("policy_decision: not yet determined")
+        lines.append("policy_routing_reason: not yet determined")
     if state.safety_result:
         lines.append(
             f"safety_result: needs_action_review={state.safety_result.needs_action_review}, "
@@ -176,6 +240,9 @@ def _build_chat_user_prompt(
         f"Conversation so far:\n{chat_history_text}\n\n"
         f"Ticket state summary:\n{state_summary}\n\n"
         f"Retrieved evidence:\n{evidence_text}\n\n"
+        "When ticket state status and retrieved evidence scope differ, distinguish them clearly. "
+        "For example, a ticket may have sufficient workflow evidence while the current retrieved "
+        "sources only support the routing framework rather than product-specific facts.\n\n"
         f"Pharmacist question: {user_query}"
     )
 
@@ -220,6 +287,12 @@ def handle_chat(
     state = ticket_to_state(db, ticket)
 
     session = get_or_create_session(db, ticket.id, session_id)
+    planning_history = get_session_messages(db, session.session_id, limit=5)
+    chat_plan = build_chat_plan(
+        user_query=user_query,
+        recent_messages=planning_history,
+        state=state,
+    )
 
     save_message(
         db=db,
@@ -238,41 +311,45 @@ def handle_chat(
 
     context = RetrievalContext(
         event_type=state.event_type.value if state.event_type else None,
-        query=user_query,
+        query=chat_plan.standalone_query,
         drug_name=event.drug_name if event else None,
         normalized_drug_name=resolve_retrieval_drug_name(event) if event else None,
         ndc=[event.ndc] if event and event.ndc else [],
         lot=event.lot if event else None,
         recall_number=recall_number,
         classification=state.classification.value if state.classification else None,
+        target_profile=chat_plan.target_profile,
     )
 
-    try:
-        evidence_result = retrieval_service.retrieve(
-            query=user_query,
-            context=context,
-            top_k=top_k,
-        )
-    except Exception:
-        db.rollback()
-        raise_review_error(
-            ReviewError.INTERNAL_SERVER_ERROR,
-            {"reason": "Evidence retrieval failed"}
-        )
+    evidence_result = None
+    sources: list[dict] = []
+    if chat_plan.answer_mode != TICKET_STATE_ONLY:
+        try:
+            evidence_result = retrieval_service.retrieve(
+                query=chat_plan.standalone_query,
+                context=context,
+                top_k=top_k,
+            )
+        except Exception:
+            db.rollback()
+            raise_review_error(
+                ReviewError.INTERNAL_SERVER_ERROR,
+                {"reason": "Evidence retrieval failed"}
+            )
 
-    sources = [
-        {
-            "source": chunk.source_path,
-            "section": chunk.section,
-            "score": round(chunk.score, 4),
-            "content": chunk.content[:300],
-        }
-        for chunk in evidence_result.chunks[:top_k]
-    ]
+        sources = [
+            {
+                "source": chunk.source_path,
+                "section": chunk.section,
+                "score": round(chunk.score, 4),
+                "content": chunk.content[:300],
+            }
+            for chunk in evidence_result.chunks[:top_k]
+        ]
 
-    if sources:
+    if sources or chat_plan.answer_mode != RETRIEVAL_REQUIRED:
         history_messages = get_session_messages(db, session.session_id)
-        state_summary = build_ticket_state_summary(state)
+        state_summary = build_ticket_state_summary(state, workflow_stage=ticket.workflow_stage)
         chat_history_text = build_chat_history_context(history_messages)
 
         client = llm_client or build_llm_client()
@@ -304,8 +381,8 @@ def handle_chat(
                 {"reason": "Chat completion failed"}
             )
     else:
-        # No evidence at all -- keep the original deterministic fallback
-        # rather than letting the model answer ungrounded.
+        # No evidence for a retrieval-required question -- keep the deterministic
+        # fallback rather than letting the model answer ungrounded.
         answer = NO_EVIDENCE_FALLBACK_ANSWER
 
     save_message(
@@ -319,11 +396,39 @@ def handle_chat(
 
     db.commit()
 
+    evidence_status = None
+    if evidence_result:
+        evidence_status = evidence_result.sufficiency.evidence_status
+    elif state.sufficiency_check:
+        evidence_status = state.sufficiency_check.evidence_status.value
+    answer_support_level = _answer_support_level(
+        answer_mode=chat_plan.answer_mode,
+        sources=sources,
+        evidence_status=evidence_status,
+    )
+
     return {
         "session_id": session.session_id,
         "answer": answer,
         "sources": sources,
+        "intent": chat_plan.intent,
+        "standalone_query": chat_plan.standalone_query,
+        "answer_mode": chat_plan.answer_mode,
+        "target_profile": chat_plan.target_profile,
+        "evidence_status": evidence_status,
+        "retrieved_evidence_scope": chat_plan.retrieved_evidence_scope,
+        "answer_support_level": answer_support_level,
     }
+
+
+def _answer_support_level(*, answer_mode: str, sources: list[dict], evidence_status: str | None) -> str:
+    if answer_mode == TICKET_STATE_ONLY:
+        return "state_only"
+    if not sources:
+        return "none"
+    if answer_mode == HYBRID:
+        return "partial"
+    return "full" if evidence_status == "sufficient" else "partial"
 
 
 def get_chat_history(

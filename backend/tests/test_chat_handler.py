@@ -28,6 +28,7 @@ from app.db.models.ticket import Ticket
 
 from app.chat.handler import (
     NO_EVIDENCE_FALLBACK_ANSWER,
+    build_ticket_state_summary,
     get_or_create_session,
     get_session_messages,
     handle_chat,
@@ -234,7 +235,7 @@ def test_handle_chat_keeps_fallback_message_and_skips_llm_when_no_evidence(db_se
     result = handle_chat(
         db=db_session,
         public_ticket_id=ticket.ticket_id,
-        user_query="Anything at all?",
+        user_query="격리는 어떻게 해?",
         session_id=None,
         retrieval_service=evidence_service,
         llm_client=llm_client,
@@ -262,6 +263,194 @@ def test_handle_chat_reuses_same_session_across_calls_without_session_id(db_sess
     assert first["session_id"] == second["session_id"]
     assert db_session.query(ChatSession).filter(ChatSession.ticket_id == ticket.id).count() == 1
     assert db_session.query(ChatMessage).filter(ChatMessage.ticket_id == ticket.id).count() == 4
+
+
+def test_handle_chat_builds_standalone_query_for_multi_turn_follow_up(db_session):
+    ticket = make_ticket(db_session, recall_number="D-REAL-2026-001", recall_number_is_fallback=False)
+    evidence_service = FakeEvidenceService(chunks=[chunk()])
+    llm_client = FakeLLMClient()
+
+    first = handle_chat(
+        db=db_session,
+        public_ticket_id=ticket.ticket_id,
+        user_query="이 리콜에서 ICU 영향 있어?",
+        session_id=None,
+        retrieval_service=evidence_service,
+        llm_client=llm_client,
+    )
+    second = handle_chat(
+        db=db_session,
+        public_ticket_id=ticket.ticket_id,
+        user_query="그럼 격리는 어떻게 해?",
+        session_id=first["session_id"],
+        retrieval_service=evidence_service,
+        llm_client=llm_client,
+    )
+
+    assert second["intent"] == "recall_action"
+    assert second["answer_mode"] == "retrieval_required"
+    assert second["target_profile"] == "recall_action"
+    assert "그럼 격리는 어떻게 해?" in second["standalone_query"]
+    assert "이 리콜에서 ICU 영향 있어?" in second["standalone_query"]
+    assert "midazolam" in second["standalone_query"]
+    assert "D-REAL-2026-001" in second["standalone_query"]
+    assert evidence_service.calls[-1]["query"] == second["standalone_query"]
+    assert evidence_service.calls[-1]["context"].target_profile == "recall_action"
+
+
+def test_handle_chat_answer_mode_ticket_state_only_skips_retrieval(db_session):
+    ticket = make_ticket(
+        db_session,
+        sufficiency_check={
+            "required_sources": ["policy", "sop"],
+            "found_sources": ["policy"],
+            "missing_sources": ["sop"],
+            "weak_sources": [],
+            "failure_reasons": [{"reason": "missing_required_document_type", "document_type": "sop"}],
+            "coverage_score": 0.5,
+            "evidence_status": "insufficient",
+            "needs_evidence_review": True,
+            "citations_ready": True,
+        },
+        policy_decision={
+            "review_type": "evidence_review",
+            "reasons": ["Required evidence is missing: sop."],
+            "decision": "route_to_hitl",
+        },
+    )
+    evidence_service = FakeEvidenceService(chunks=[chunk()])
+    llm_client = FakeLLMClient(answer="Evidence is missing from the ticket state.")
+
+    result = handle_chat(
+        db=db_session,
+        public_ticket_id=ticket.ticket_id,
+        user_query="뭐가 부족해?",
+        session_id=None,
+        retrieval_service=evidence_service,
+        llm_client=llm_client,
+    )
+
+    assert result["intent"] == "evidence_gap"
+    assert result["answer_mode"] == "ticket_state_only"
+    assert result["evidence_status"] == "insufficient"
+    assert evidence_service.calls == []
+    assert result["sources"] == []
+    assert len(llm_client.completions.calls) == 1
+    prompt = llm_client.completions.calls[0]["messages"][1]["content"]
+    assert "missing_sources: sop" in prompt
+    assert "failure_reasons:" in prompt
+    assert "workflow_stage: PENDING_REVIEW" in prompt
+
+
+def test_handle_chat_workflow_explanation_uses_hybrid_retrieval(db_session):
+    ticket = make_ticket(
+        db_session,
+        policy_decision={
+            "review_type": "evidence_review",
+            "reasons": ["Required evidence is missing: sop."],
+            "decision": "route_to_hitl",
+        },
+    )
+    evidence_service = FakeEvidenceService(chunks=[chunk(document_type="policy", section="review_routing_rules")])
+    llm_client = FakeLLMClient(answer="It was routed based on policy and ticket state.")
+
+    result = handle_chat(
+        db=db_session,
+        public_ticket_id=ticket.ticket_id,
+        user_query="왜 review로 갔어?",
+        session_id=None,
+        retrieval_service=evidence_service,
+        llm_client=llm_client,
+    )
+
+    assert result["intent"] == "workflow_explanation"
+    assert result["answer_mode"] == "hybrid"
+    assert result["target_profile"] == "workflow_explanation"
+    assert result["retrieved_evidence_scope"] == "workflow_routing_and_ticket_evidence"
+    assert result["answer_support_level"] == "partial"
+    assert "workflow routing review decision evidence sufficiency" in result["standalone_query"]
+    assert len(evidence_service.calls) == 1
+    assert evidence_service.calls[0]["query"] == result["standalone_query"]
+    assert evidence_service.calls[0]["context"].target_profile == "workflow_explanation"
+    assert result["sources"]
+    prompt = llm_client.completions.calls[0]["messages"][1]["content"]
+    assert "When ticket state status and retrieved evidence scope differ" in prompt
+
+
+def test_workflow_explanation_profile_includes_ticket_specific_recall_notice_target():
+    from app.rag.router import EvidenceRouter
+
+    plan = EvidenceRouter().build_plan(
+        RetrievalContext(
+            event_type="recall",
+            query="why final approval",
+            target_profile="workflow_explanation",
+        ),
+        top_k=3,
+    )
+
+    target_pairs = [(target.document_type, target.sections, target.required) for target in plan.targets]
+    assert ("recall_notice", ["recall_notice"], False) in target_pairs
+    assert ("policy", ["evidence_requirements", "review_routing_rules"], True) in target_pairs
+    assert ("sop", ["evidence_requirements", "review_routing"], True) in target_pairs
+
+
+def test_build_ticket_state_summary_includes_routing_and_inventory_context(db_session):
+    ticket = make_ticket(
+        db_session,
+        inventory_result={
+            "matched": True,
+            "match_type": "exact_ndc_match",
+            "match_confidence": 0.97,
+            "matched_rows": [
+                {
+                    "inventory_id": "INV-1",
+                    "drug_name": "midazolam",
+                    "ndc": "00641601441",
+                    "lot": "LOT-A",
+                    "quantity": 12,
+                    "department": "ICU",
+                    "days_remaining": 7,
+                }
+            ],
+            "needs_identity_review": False,
+        },
+        impact_summary={
+            "affected_departments": ["ICU"],
+            "department_breakdown": {"ICU": 12},
+            "total_quantity": 12,
+            "priority": "HIGH",
+            "urgent": True,
+            "urgent_reason": "ICU inventory affected.",
+        },
+        sufficiency_check={
+            "required_sources": ["recall_notice", "policy", "sop"],
+            "found_sources": ["recall_notice", "policy"],
+            "missing_sources": ["sop"],
+            "weak_sources": [],
+            "failure_reasons": [{"reason": "missing_required_document_type", "document_type": "sop"}],
+            "coverage_score": 0.67,
+            "evidence_status": "insufficient",
+            "needs_evidence_review": True,
+            "citations_ready": True,
+        },
+        policy_decision={
+            "review_type": "evidence_review",
+            "reasons": ["Required evidence is missing: sop."],
+            "decision": "route_to_hitl",
+        },
+    )
+    from app.orchestration.state import ticket_to_state
+
+    summary = build_ticket_state_summary(ticket_to_state(db_session, ticket), workflow_stage=ticket.workflow_stage)
+
+    assert "ticket_id: T-CHAT-001" in summary
+    assert "workflow_stage: PENDING_REVIEW" in summary
+    assert "inventory_impact: affected_departments=ICU" in summary
+    assert "evidence_status: insufficient" in summary
+    assert "coverage_score: 0.67" in summary
+    assert "missing_sources: sop" in summary
+    assert "policy_routing_reason: Required evidence is missing: sop." in summary
 
 
 def test_get_session_messages_scoped_by_session_not_ticket(db_session):
