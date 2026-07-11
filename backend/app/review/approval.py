@@ -35,6 +35,16 @@ from app.schemas.report import DraftReport
 from app.schemas.review import ApproveRequest, RejectRequest, ReviseRequest, SystemReviseRequest
 from app.workflow.state import stage_for_status
 
+def _find_pending_approval(db: Session, ticket_id: int) -> Approval | None:
+    """run_policy_aggregation_step에서 ROUTE_TO_HITL 시 생성한 pending
+    Approval row를 찾는다. handle_approve/handle_reject가 새 row를 매번
+    insert하는 대신 이 row를 update하도록 하기 위함."""
+    return (
+        db.query(Approval)
+        .filter(Approval.ticket_id == ticket_id, Approval.status == ApprovalStatus.PENDING.value)
+        .order_by(Approval.id.desc())
+        .first()
+    )
 
 def handle_approve(
     db: Session,
@@ -71,14 +81,20 @@ def handle_approve(
     """
     start = time.time()
 
-    # 1. 승인 기록 저장
-    approval = Approval(
-        ticket_id=ticket.id,
-        reviewer=request.reviewer,
-        status=ApprovalStatus.APPROVED.value,
-        comment=request.comment,
-    )
-    db.add(approval)
+    # 1. 기존 pending 기록을 찾아 승인으로 갱신 (없으면 새로 생성 -- 레거시 데이터 대비)
+    approval = _find_pending_approval(db, ticket.id)
+    if approval is not None:
+        approval.reviewer = request.reviewer
+        approval.status = ApprovalStatus.APPROVED.value
+        approval.comment = request.comment
+    else:
+        approval = Approval(
+            ticket_id=ticket.id,
+            reviewer=request.reviewer,
+            status=ApprovalStatus.APPROVED.value,
+            comment=request.comment,
+        )
+        db.add(approval)
     db.flush()
 
     # 2. final_v1 저장 -- source_version을 그대로 freeze (재생성 없음)
@@ -144,14 +160,19 @@ def handle_reject(
     """
     start = time.time()
 
-    # 1. 반려 기록 저장
-    approval = Approval(
-        ticket_id=ticket.id,
-        reviewer=request.reviewer,
-        status=ApprovalStatus.REJECTED.value,
-        comment=request.comment,
-    )
-    db.add(approval)
+    approval = _find_pending_approval(db, ticket.id)
+    if approval is not None:
+        approval.reviewer = request.reviewer
+        approval.status = ApprovalStatus.REJECTED.value
+        approval.comment = request.comment
+    else:
+        approval = Approval(
+            ticket_id=ticket.id,
+            reviewer=request.reviewer,
+            status=ApprovalStatus.REJECTED.value,
+            comment=request.comment,
+        )
+        db.add(approval)
     db.flush()
 
     # 2. 티켓 상태를 반려로 전환
@@ -179,7 +200,7 @@ def handle_reject(
 
 def handle_revise(
     db: Session,
-    ticket_id: int,
+    ticket: Ticket,
     public_ticket_id: str,
     request: ReviseRequest,
 ) -> dict:
@@ -230,7 +251,7 @@ def handle_revise(
         # 고정 문구를 쓰고, change_reason/reviewer_comment는 약사가 준 comment를 사용.
         save_report_version(
             db=db,
-            ticket_id=ticket_id,
+            ticket_id=ticket.id,
             version_tag=ReportVersionTag.DRAFT_V2,
             content=request.revised_draft,
             created_by=request.reviewer,
@@ -240,12 +261,14 @@ def handle_revise(
             safety_check_result=safety_result,
         )
         new_version = ReportVersionTag.DRAFT_V2.value
+        ticket.status = TicketStatus.REVIEW_ROUTED.value
+        ticket.workflow_stage = stage_for_status(TicketStatus.REVIEW_ROUTED).value
 
     # 3. audit log 기록
     duration_ms = int((time.time() - start) * 1000)
     write_audit_log(
         db=db,
-        ticket_id=ticket_id,
+        ticket_id=ticket.id,
         step_name=WorkflowStep.APPROVAL_DECISION,
         input_json={
             "reviewer": request.reviewer,
@@ -346,6 +369,9 @@ def handle_system_revise(
             safety_check_result=safety_result,
         )
         new_version = ReportVersionTag.DRAFT_V2.value
+        
+        ticket.status = TicketStatus.REVIEW_ROUTED.value
+        ticket.workflow_stage = stage_for_status(TicketStatus.REVIEW_ROUTED).value
 
     duration_ms = int((time.time() - start) * 1000)
     write_audit_log(
