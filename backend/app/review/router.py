@@ -249,6 +249,16 @@ async def revise_ticket_with_llm(
     수정 후 safety check 재실행 -> 통과 시 draft_v2 저장.
     """
     ticket = get_ticket_by_public_id(db, ticket_id)
+
+    # Already-approved tickets are terminal (final_v1 is frozen and audited);
+    # block any further system-driven revision instead of silently appending
+    # another draft_v2 behind the pharmacist's back.
+    if ticket.status == TicketStatus.APPROVED.value:
+        raise_review_error(
+            ReviewError.INVALID_VERSION_TAG,
+            {"ticket_id": ticket_id, "reason": "Ticket already approved — cannot revise a finalized report"},
+        )
+
     latest = get_latest_report(db=db, ticket_id=ticket.id)
     if not latest:
         raise_review_error(

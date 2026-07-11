@@ -319,3 +319,28 @@ def test_upload_run_approve_freezes_structured_final_v1(client: TestClient) -> N
     assert final_v1["approved_by"] == "pharm-1"
     assert final_v1["approval_comment"] == "Looks good."
     assert final_v1["approved_at"] is not None
+
+
+def test_revise_with_llm_rejected_after_ticket_approved(client: TestClient) -> None:
+    """Once a ticket is approved (final_v1 frozen), /revise-with-llm must be
+    rejected instead of silently appending another draft_v2 behind the
+    pharmacist's back."""
+    ticket_id = _upload_and_run(client, recall_number="D-TEST-2026-005")
+
+    approve_resp = client.post(
+        f"/approval/{ticket_id}/approve",
+        json={"reviewer": "pharm-1", "comment": "Looks good."},
+    )
+    assert approve_resp.status_code == 200, approve_resp.text
+
+    revise_resp = client.post(
+        f"/approval/{ticket_id}/revise-with-llm",
+        json={"reviewer": "pharm-1", "reviewer_comment": "please soften the tone"},
+    )
+    assert revise_resp.status_code == 422, revise_resp.text
+    body = revise_resp.json()["detail"]
+    assert body["error_code"] == "INVALID_VERSION_TAG"
+
+    # No extra draft_v2 must have been created by the rejected request.
+    versions_after = client.get(f"/reports/{ticket_id}/versions").json()
+    assert [v["version_tag"] for v in versions_after] == ["draft_v1", "final_v1"]
