@@ -75,12 +75,51 @@ ticket-level evidence state used for routing/review decisions.
 | `snapshot_type` | Currently `workflow_evidence`, distinguishing workflow decision evidence from future chat/ad-hoc evidence snapshots. |
 | `snapshot_version` | Monotonic per ticket and snapshot type. Retry/re-run creates the next version. |
 | `source_audit_log_id` | The sufficiency-check audit log row that finalized the evidence decision represented by the snapshot. |
-| `selected_chunks` | Evidence chunks selected for the ticket-level decision. |
+| `selected_chunks` | Evidence chunks selected for the ticket-level decision. Each chunk includes dense similarity plus hybrid reranking metadata such as `rank_score`, `rank_reasons`, `matched_identifiers`, `filter_level`, `lexical_overlap_score`, and `lexical_overlap_terms`. |
 | `citations` | Citation list derived from selected chunks. |
 | `sufficiency_result` | Required/found/missing/weak sources, coverage, failure reasons, and citation readiness. |
 | `retrieval_context` | Query-time ticket context used by RAG. |
 | `retrieval_plan` | RAG target document types/sections when available. |
-| `retrieval_trace` | Retrieval execution trace and selected chunk metadata. |
+| `retrieval_trace` | Retrieval execution trace, filter attempts, selected chunk metadata, and rank reasons. |
+
+Evidence retrieval uses dense vector search as the candidate generator, then
+applies a lightweight hybrid rerank. The reranker keeps the original dense
+`similarity_score` and adds a combined `rank_score` using lexical overlap,
+ticket identifier matches (`recall_number`, NDC, lot, normalized drug name,
+RxCUI), required document type/section boosts, and fallback penalties. For
+recall tickets, a `recall_notice` selected only by section fallback is treated
+as weak unless it matches at least one strong ticket identifier.
+
+Example selected recall notice metadata:
+
+```json
+{
+  "document_type": "recall_notice",
+  "section": "recall_notice",
+  "similarity_score": 0.551,
+  "rank_score": 1.0477,
+  "filter_level": "strong_identifier_section",
+  "rank_reasons": [
+    "lexical_overlap",
+    "required_document_type",
+    "required_section",
+    "recall_number_match",
+    "lot_match"
+  ],
+  "matched_identifiers": {
+    "recall_number": "D-0277-2024",
+    "lot": "2331062"
+  },
+  "lexical_overlap_score": 0.0667,
+  "lexical_overlap_terms": ["0277", "2024", "class", "recall"]
+}
+```
+
+Swagger sanity check: uploading a recall event with `recall_number=D-0277-2024`
+and `lot_number=2331062`, running `POST /tickets/{ticket_id}/run`, then calling
+`GET /tickets/{ticket_id}/evidence` should return `evidence_status=sufficient`,
+with the selected recall notice at `filter_level=strong_identifier_section` and
+`matched_identifiers` containing the recall number and lot.
 
 | Method | Path | Description |
 |---|---|---|
