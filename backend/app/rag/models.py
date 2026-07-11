@@ -16,6 +16,7 @@ class RetrievalContext:
     lot: str | None = None
     recall_number: str | None = None
     classification: str | None = None
+    target_profile: str | None = None
 
 
 @dataclass(frozen=True)
