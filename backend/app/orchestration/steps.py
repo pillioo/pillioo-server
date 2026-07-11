@@ -14,6 +14,7 @@ from app.inventory.matcher import inventory_match
 from app.orchestration.retrieval_identity import resolve_retrieval_drug_name
 from app.report.versioning import save_report_version
 from app.rag.adapter import to_ticket_state_fields
+from app.rag.evidence_snapshot import create_ticket_evidence_snapshot
 from app.rag.models import RetrievalContext
 from app.schemas.common import ReportVersionTag, TicketStatus, WorkflowStep
 from app.schemas.evidence import EvidenceResult
@@ -230,7 +231,7 @@ def run_evidence_gate_step(db: Session, ticket: Ticket, state: TicketState) -> T
     if not gate["can_generate_draft"]:
         ticket.workflow_stage = WorkflowStage.PENDING_POLICY_AGGREGATION.value
 
-    write_audit_log(
+    gate_audit_log = write_audit_log(
         db=db,
         ticket_id=ticket.id,
         step_name=WorkflowStep.SUFFICIENCY_CHECK,
@@ -240,6 +241,12 @@ def run_evidence_gate_step(db: Session, ticket: Ticket, state: TicketState) -> T
         },
         output_json={"step_status": "succeeded", **gate},
         duration_ms=_elapsed_ms(started),
+    )
+    create_ticket_evidence_snapshot(
+        db=db,
+        ticket=ticket,
+        state=state,
+        source_audit_log=gate_audit_log,
     )
     return state
 
@@ -399,6 +406,10 @@ def evidence_audit_output(*, query: str, top_k: int, rag_result, evidence_result
         "query": query,
         "top_k": top_k,
         "retrieval_context": retrieval_context_json(rag_result.context),
+        "retrieval_plan": {
+            "event_type": rag_result.plan.event_type,
+            "targets": [target.to_dict() for target in rag_result.plan.targets],
+        },
         "filter_expressions": sorted({chunk.filter_expr for chunk in rag_result.chunks if chunk.filter_expr}),
         "evidence_status": sufficiency_check.evidence_status.value,
         "coverage_score": sufficiency_check.coverage_score,
@@ -425,6 +436,7 @@ def retrieval_context_json(context: RetrievalContext) -> dict:
         "lot": context.lot,
         "recall_number": context.recall_number,
         "classification": context.classification,
+        "target_profile": context.target_profile,
     }
 
 
