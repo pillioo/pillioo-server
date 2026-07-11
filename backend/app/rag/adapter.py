@@ -19,6 +19,10 @@ def to_schema_chunk(chunk: RagEvidenceChunk) -> EvidenceChunk:
         source_path=chunk.source_path,
         chunk_index=chunk.chunk_index,
         drug_name=chunk.drug_name,
+        filter_level=chunk.filter_level,
+        matched_identifiers=chunk.matched_identifiers,
+        rank_reasons=chunk.rank_reasons,
+        rank_score=chunk.rank_score,
     )
 
 

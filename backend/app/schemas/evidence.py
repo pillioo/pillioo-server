@@ -15,6 +15,10 @@ class EvidenceChunk(BaseModel):
     source_path: str
     chunk_index: int = Field(..., ge=0)
     drug_name: Optional[str] = None
+    filter_level: Optional[str] = None
+    matched_identifiers: dict = Field(default_factory=dict)
+    rank_reasons: list[str] = Field(default_factory=list)
+    rank_score: Optional[float] = None
 
 
 class Citation(BaseModel):

@@ -5,6 +5,10 @@ from app.rag.models import EvidenceChunk, EvidencePlan, EvidenceTarget, Sufficie
 
 
 class SufficiencyChecker:
+    STRONG_RECALL_NOTICE_IDENTIFIER_KEYS = frozenset(
+        {"recall_number", "ndc", "lot", "normalized_drug_name", "rxnorm_rxcui"}
+    )
+
     def check(self, chunks: list[EvidenceChunk], *, plan: EvidencePlan) -> SufficiencyResult:
         required_targets = {target.document_type: target for target in plan.targets if target.required}
         required = list(required_targets)
@@ -50,9 +54,17 @@ class SufficiencyChecker:
         )
 
     def _is_strong_enough_for_target(self, chunk: EvidenceChunk, target: EvidenceTarget) -> bool:
+        if target.document_type == "recall_notice":
+            return self._is_strong_recall_notice_match(chunk, target)
         if target.sections:
             return chunk.section in target.sections
         return chunk.filter_level not in LOOSE_FILTER_LEVELS
+
+    def _is_strong_recall_notice_match(self, chunk: EvidenceChunk, target: EvidenceTarget) -> bool:
+        section_ok = chunk.section in target.sections if target.sections else True
+        if not section_ok:
+            return False
+        return bool(self.STRONG_RECALL_NOTICE_IDENTIFIER_KEYS & set(chunk.matched_identifiers))
 
     def _missing_document_type_reason(self, document_type: str) -> dict[str, object]:
         return {
@@ -76,6 +88,17 @@ class SufficiencyChecker:
 
         if target.sections:
             matched_sections = sorted({chunk.section for chunk in chunks if chunk.section})
+            if document_type == "recall_notice":
+                return {
+                    "reason": "recall_notice_identifier_mismatch",
+                    "document_type": document_type,
+                    "required_sections": target.sections,
+                    "matched_sections": matched_sections,
+                    "matched_identifiers": [
+                        chunk.matched_identifiers for chunk in chunks if chunk.matched_identifiers
+                    ],
+                    "filter_levels": sorted({chunk.filter_level for chunk in chunks if chunk.filter_level}),
+                }
             if any(chunk.filter_level == "strong_identifier" for chunk in chunks):
                 return {
                     "reason": "identifier_section_mismatch",

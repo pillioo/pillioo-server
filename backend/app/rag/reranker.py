@@ -26,6 +26,10 @@ class MetadataAwareReranker:
                 score += 0.20
                 reasons.append("recall_number_match")
                 matched["recall_number"] = context.recall_number
+            if context.normalized_drug_name and chunk.normalized_drug_name == context.normalized_drug_name:
+                score += 0.12
+                reasons.append("normalized_drug_name_match")
+                matched["normalized_drug_name"] = context.normalized_drug_name
             if context.rxnorm_rxcui and chunk.rxnorm_rxcui == context.rxnorm_rxcui:
                 score += 0.10
                 reasons.append("rxnorm_rxcui_match")
