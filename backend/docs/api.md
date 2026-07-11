@@ -120,7 +120,7 @@ Chat answer modes:
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/inventory/impact/{ticket_id}` | Recomputes inventory match, impact summary, and quality check for a ticket's drug/NDC/lot. Useful for a ticket detail "inventory impact" panel. |
+| GET | `/inventory/impact/{ticket_id}` | Recomputes inventory match, impact summary, and quality check for a ticket's drug/NDC/lot from the latest `matcher.py`/`impact.py`/`quality.py` results (not read from ticket snapshot columns). Returns a fixed-shape `InventoryImpactResponse` (`match_result`, `impact_result`, `quality_result`, `no_match_reason`) regardless of whether a match was found, so the frontend can rely on a stable response structure. |
 | GET | `/dashboard/summary` | Returns aggregate ticket counts (`by_status`, `by_review_type`, `pending_approvals`, `workflow_failed`, `high_priority`, `today_created`, `evidence_review_pending`) plus operational queues for pharmacist/ops triage: `urgent_tickets`, `recent_failures`, `recent_tickets`, `evidence_queue` (evidence-review tickets with weak sources/failure reasons/citation readiness from the latest evidence snapshot), `review_approval_queue` (pending approvals, draft_v2-without-final_v1 revision candidates, safety-check-failed tickets), and `inventory_impact` (impacted ticket counts by match type, high-impact ticket list). |
 
 ## Audit & Health
