@@ -19,6 +19,8 @@ class EvidenceChunk(BaseModel):
     matched_identifiers: dict = Field(default_factory=dict)
     rank_reasons: list[str] = Field(default_factory=list)
     rank_score: Optional[float] = None
+    lexical_overlap_score: Optional[float] = None
+    lexical_overlap_terms: list[str] = Field(default_factory=list)
 
 
 class Citation(BaseModel):

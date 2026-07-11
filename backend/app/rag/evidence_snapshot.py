@@ -218,7 +218,14 @@ def enrich_legacy_selected_chunks(
             )
         )
         if trace:
-            for key in ("filter_level", "matched_identifiers", "rank_reasons", "rank_score"):
+            for key in (
+                "filter_level",
+                "matched_identifiers",
+                "rank_reasons",
+                "rank_score",
+                "lexical_overlap_score",
+                "lexical_overlap_terms",
+            ):
                 if key not in item:
                     item[key] = trace.get(key)
         enriched.append(item)

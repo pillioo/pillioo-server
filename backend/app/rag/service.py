@@ -136,6 +136,8 @@ def build_retrieval_trace(
                 "rank_score": chunk.rank_score,
                 "rank_reasons": chunk.rank_reasons,
                 "matched_identifiers": chunk.matched_identifiers,
+                "lexical_overlap_score": chunk.lexical_overlap_score,
+                "lexical_overlap_terms": chunk.lexical_overlap_terms,
                 "filter_level": chunk.filter_level,
                 "target_document_type": chunk.target_document_type,
             }

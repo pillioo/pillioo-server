@@ -73,6 +73,8 @@ class EvidenceChunk:
     rank_score: float = 0.0
     rank_reasons: list[str] = field(default_factory=list)
     matched_identifiers: dict[str, Any] = field(default_factory=dict)
+    lexical_overlap_score: float = 0.0
+    lexical_overlap_terms: list[str] = field(default_factory=list)
 
     @classmethod
     def from_hit(
@@ -117,6 +119,8 @@ class EvidenceChunk:
             "rank_score": self.rank_score,
             "rank_reasons": self.rank_reasons,
             "matched_identifiers": self.matched_identifiers,
+            "lexical_overlap_score": self.lexical_overlap_score,
+            "lexical_overlap_terms": self.lexical_overlap_terms,
             "chunk_id": self.chunk_id,
             "chunk_index": self.chunk_index,
             "content": self.content,
