@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models.ticket import Ticket
 from app.event.normalizer import normalize_event
-from app.schemas.io import EventUploadRequest, EventUploadResponse
+from app.schemas.io import EventUploadRequest, EventUploadResponse, EventFeedItem, EventLatestResponse
 
 from app.event.dedup import check_and_save_event, release_event
 from app.orchestration.tickets import get_or_create_ticket_record
@@ -161,16 +161,40 @@ async def get_latest_events(
         .all()
     )
 
-    return [
-        {
-            "ticket_id": ticket.ticket_id,
-            "event_type": ticket.event_type,
-            "drug_name": ticket.drug_name,
-            "ndc": ticket.ndc,
-            "classification": ticket.classification,
-            "status": ticket.status,
-            "workflow_stage": ticket.workflow_stage,
-            "created_at": ticket.created_at,
-        }
-        for ticket in tickets
-    ]
+    feed_items = []
+    for ticket in tickets:
+        # [유지] 팀원의 TicketStatus Enum이 에러를 내지 않도록 안전하게 추출
+        status_val = ticket.status.value if hasattr(ticket.status, "value") else ticket.status
+        
+        # 워크플로우 실행 가능 여부만 조용히 판단
+        can_run = False
+        if status_val == "CREATED" or ticket.workflow_stage == "PENDING_INVENTORY":
+            can_run = True
+
+        feed_items.append(
+            EventFeedItem(
+                # openfda_id가 없으면 티켓 ID를 활용해 안전하게 대체
+                event_id=ticket.openfda_id or f"fallback-{ticket.ticket_id}",
+                source="openFDA" if ticket.openfda_id else "manual_upload",
+                is_duplicate=False, 
+                
+                # DB에 product_description이 비어있을 경우를 대비한 방어 코드
+                product_description=ticket.product_description or ticket.drug_name,
+                recall_reason=ticket.reason_for_recall,
+                ticket_id=ticket.ticket_id,
+                can_run=can_run,
+                
+                # [유지] 기존 API가 주던 데이터는 프론트가 혹시 쓸지 모르니 통째로 raw에 담아줍니다.
+                raw_event_data={
+                    "drug_name": ticket.drug_name,
+                    "ndc": ticket.ndc,
+                    "classification": getattr(ticket.classification, "value", ticket.classification) if ticket.classification else None,
+                    "event_type": getattr(ticket.event_type, "value", ticket.event_type) if ticket.event_type else None,
+                    "status": status_val,
+                    "workflow_stage": ticket.workflow_stage,
+                },
+                created_at=ticket.created_at
+            )
+        )
+
+    return EventLatestResponse(events=feed_items, total_count=len(feed_items))

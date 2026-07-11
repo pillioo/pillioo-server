@@ -201,3 +201,20 @@ class EvalResult(BaseModel):
     workflow_steps_completed: int = Field(..., ge=0)
     duration_ms: int = Field(..., ge=0)
     failure_reason: Optional[str] = None
+
+
+class EventFeedItem(BaseModel):
+    event_id: str
+    source: str
+    is_duplicate: bool
+    product_description: str
+    recall_reason: Optional[str] = None
+    ticket_id: Optional[str] = None
+    can_run: bool = False
+    raw_event_data: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+class EventLatestResponse(BaseModel):
+    events: list[EventFeedItem]
+    total_count: int
