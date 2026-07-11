@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func, cast, Date, case
 from datetime import date
 
 from app.db.session import get_db
 from app.db.models.ticket import Ticket
-from app.db.models.approval import Approval
+from app.db.models.approval_model import Approval
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -34,37 +34,25 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             by_review_type[str(review_type)] = count
 
     # pending approvals 수
-    try:
-        pending_approvals = db.query(Approval).filter(
-            Approval.status == "pending"
-        ).count()
-    except Exception:
-        pending_approvals = 0
-
-    # workflow failed 수
-    workflow_failed = db.query(Ticket).filter(
-        Ticket.status == "WORKFLOW_FAILED"
+    pending_approvals = db.query(Approval).filter(
+        Approval.status == "pending"
     ).count()
 
-    # high priority 수
-    high_priority = db.query(Ticket).filter(
-        Ticket.priority == "HIGH"
-    ).count()
-
-    # 오늘 생성된 티켓 수
+    # 티켓 기반 통계는 단일 쿼리로 집계 (workflow failed, high priority,
+    # 오늘 생성된 티켓, evidence review 대기)
     today = date.today()
-    today_created = db.query(Ticket).filter(
-        cast(Ticket.created_at, Date) == today
-    ).count()
+    workflow_failed, high_priority, today_created, evidence_review_pending = db.query(
+        func.count(case((Ticket.status == "WORKFLOW_FAILED", 1))),
+        func.count(case((Ticket.priority == "HIGH", 1))),
+        func.count(case((cast(Ticket.created_at, Date) == today, 1))),
+        func.count(case((
+            (Ticket.review_type == "evidence_review") & (Ticket.status == "REVIEW_ROUTED"), 1
+        ))),
+    ).one()
 
-    # evidence review 대기 수
-    evidence_review_pending = db.query(Ticket).filter(
-        Ticket.review_type == "evidence_review",
-        Ticket.status == "REVIEW_ROUTED"
-    ).count()
-
-    # 긴급 티켓 목록 (urgent=True 또는 days_remaining <= 3)
+    # 긴급 티켓 목록 (high priority, 종료되지 않은 티켓)
     urgent_tickets_query = db.query(Ticket).filter(
+        Ticket.priority == "HIGH",
         Ticket.status != "CLOSED"
     ).order_by(Ticket.created_at.desc()).limit(5).all()
 
@@ -74,7 +62,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             "drug_name": t.drug_name,
             "status": str(t.status) if t.status else None,
             "review_type": str(t.review_type) if t.review_type else None,
-            "priority": str(t.priority) if hasattr(t, "priority") else None,
+            "priority": str(t.priority) if t.priority else None,
             "created_at": t.created_at.isoformat() if t.created_at else None,
         }
         for t in urgent_tickets_query

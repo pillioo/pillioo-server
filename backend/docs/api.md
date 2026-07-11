@@ -121,7 +121,23 @@ Chat answer modes:
 | Method | Path | Description |
 |---|---|---|
 | GET | `/inventory/impact/{ticket_id}` | Recomputes inventory match, impact summary, and quality check for a ticket's drug/NDC/lot. Useful for a ticket detail "inventory impact" panel. |
-| GET | `/dashboard/summary` | Returns aggregate ticket counts by status and review type plus a small recent-ticket list. This is a basic dashboard summary, not a full analytics API. |
+| GET | `/dashboard/summary` | Returns aggregate ticket counts by status and review type, plus pending/failed/priority stats, urgent and recently-failed ticket lists, and a small recent-ticket list. This is a basic dashboard summary, not a full analytics API. |
+
+`GET /dashboard/summary` response fields:
+
+| Field | Meaning |
+|---|---|
+| `total_tickets` | Total ticket count. |
+| `by_status` | Ticket count grouped by `status`. |
+| `by_review_type` | Ticket count grouped by `review_type`. |
+| `pending_approvals` | Count of `Approval` rows with `status=pending`. |
+| `workflow_failed` | Count of tickets with `status=WORKFLOW_FAILED`. |
+| `high_priority` | Count of tickets with `priority=HIGH`. |
+| `today_created` | Count of tickets created today (by `created_at` date). |
+| `evidence_review_pending` | Count of tickets with `review_type=evidence_review` and `status=REVIEW_ROUTED`. |
+| `urgent_tickets` | Up to 5 most recent tickets with `priority=HIGH` and `status!=CLOSED`; each includes `ticket_id`, `drug_name`, `status`, `review_type`, `priority`, `created_at`. |
+| `recent_failures` | Up to 3 most recent tickets with `status=WORKFLOW_FAILED`; each includes `ticket_id`, `drug_name`, `created_at`. |
+| `recent_tickets` | 5 most recently created tickets; each includes `ticket_id`, `drug_name`, `status`, `review_type`, `created_at`. |
 
 ## Audit & Health
 
