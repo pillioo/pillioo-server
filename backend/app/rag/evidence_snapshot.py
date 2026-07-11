@@ -123,7 +123,7 @@ def snapshot_to_response(snapshot: TicketEvidenceSnapshot, public_ticket_id: str
         "source_audit_log_id": snapshot.source_audit_log_id,
         "created_workflow_step": snapshot.created_workflow_step,
         "created_at": snapshot.created_at,
-        "evidence_status": snapshot.evidence_status,
+        "evidence_status": sufficiency.get("evidence_status", snapshot.evidence_status),
         "coverage_score": snapshot.coverage_score,
         "citations_ready": snapshot.citations_ready,
         "target_profile": snapshot.target_profile,
