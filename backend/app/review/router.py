@@ -4,6 +4,7 @@ Review Router
 FastAPI router for pharmacist review workspace endpoints.
 
 Endpoints:
+    GET  /tickets                        -> ticket list/search (filters + pagination)
     GET  /tickets/{ticket_id}            -> consolidated ticket detail (status, steps, can_rerun)
     GET  /tickets/{ticket_id}/review     -> review payload (pharmacist screen)
     GET  /approval/pending               -> pending approval list
@@ -19,7 +20,7 @@ Endpoints:
 from app.schemas.io import PendingApprovalItem
 from app.schemas.report import ReportVersion
 from app.schemas.workflow import AuditLogEntry
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.audit.logger import get_audit_trace
@@ -47,21 +48,66 @@ router = APIRouter(tags=["review"])
 # ──────────────────────────────────────────────
 
 @router.get("/tickets")
-async def find_ticket_by_recall_number(
-    recall_number: str,
+async def list_tickets(
+    status: str | None = Query(None),
+    review_type: str | None = Query(None),
+    priority: str | None = Query(None),
+    recall_number: str | None = Query(None),
+    q: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     """
-    recall_number로 ticket_id를 찾기 위한 조회용 엔드포인트 (Swagger 테스트 편의용).
-    같은 recall_number로 여러 번 업로드해도 티켓은 하나만 생성되므로 가장 최근 건을 반환한다.
+    Ticket list/search API. Supports filtering by status, review_type,
+    priority, recall_number, and free-text query (q, matched against
+    drug_name). Returns paginated results shaped as
+    {items, total, limit, offset}.
     """
-    ticket = get_ticket_by_recall_number(db, recall_number)
+    query = db.query(Ticket)
+
+    if status:
+        query = query.filter(Ticket.status == status)
+    if review_type:
+        query = query.filter(Ticket.review_type == review_type)
+    if priority:
+        query = query.filter(Ticket.priority == priority)
+    if recall_number:
+        query = query.filter(Ticket.recall_number == recall_number)
+    if q:
+        query = query.filter(Ticket.drug_name.ilike(f"%{q}%"))
+
+    total = query.count()
+    tickets = (
+        query.order_by(Ticket.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        {
+            "ticket_id": t.ticket_id,
+            "status": t.status,
+            "workflow_stage": t.workflow_stage,
+            "drug_name": t.drug_name,
+            "ndc": t.ndc,
+            "lot": t.lot,
+            "classification": t.classification,
+            "recall_number": t.recall_number,
+            "priority": t.priority,
+            "review_type": t.review_type,
+            "created_at": t.created_at,
+            "updated_at": t.updated_at,
+        }
+        for t in tickets
+    ]
+
     return {
-        "ticket_id": ticket.ticket_id,
-        "recall_number": ticket.recall_number,
-        "status": ticket.status,
-        "workflow_stage": ticket.workflow_stage,
-        "created_at": ticket.created_at,
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -89,7 +135,7 @@ async def get_review_payload(
     - Raises REVIEW_NOT_FOUND if review_type is not yet determined.
     - Returns review payload if review_type is available.
     """
-   
+
     ticket = get_ticket_by_public_id(db, ticket_id)
 
 
