@@ -293,7 +293,7 @@ async def revise_ticket(
     ticket = get_ticket_by_public_id(db, ticket_id)
     return handle_revise(
         db=db,
-        ticket_id=ticket.id,
+        ticket=ticket,
         public_ticket_id=ticket.ticket_id,
         request=request,
     )

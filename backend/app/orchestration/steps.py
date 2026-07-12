@@ -23,7 +23,9 @@ from app.schemas.workflow import TicketState
 from app.workflow.policy import requires_evidence_review
 from app.workflow.routing import aggregate_policy_decision, policy_audit_output
 from app.workflow.state import WorkflowStage, stage_for_status
-
+from app.db.models.approval_model import Approval
+from app.schemas.common import ApprovalStatus, PolicyDecisionAction
+from app.review.approval import _find_pending_approval
 
 StepResult = TypeVar("StepResult")
 
@@ -347,6 +349,17 @@ def run_policy_aggregation_step(db: Session, ticket: Ticket, state: TicketState)
     ticket.review_type = decision.review_type.value
     ticket.status = updated.status.value
     ticket.workflow_stage = stage_for_status(updated.status).value
+    
+    if decision.decision == PolicyDecisionAction.ROUTE_TO_HITL:
+        existing_pending = _find_pending_approval(db, ticket.id)
+        if existing_pending is None:
+            db.add(
+                Approval(
+                    ticket_id=ticket.id,
+                    status=ApprovalStatus.PENDING.value,
+                    reviewer="",  # unassigned sentinel — NOT NULL 컬럼 우회
+                )
+            )
 
     write_audit_log(
         db=db,
