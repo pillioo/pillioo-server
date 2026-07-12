@@ -17,4 +17,4 @@ class ChatMessage(BaseModel):
     created_at: datetime
     # "succeeded" | "failed". Failed assistant turns are now persisted
     # instead of being silently rolled back (see app.chat.handler.handle_chat).
-    status: str = "succeeded"
+    status: Literal["succeeded", "failed"] = "succeeded"

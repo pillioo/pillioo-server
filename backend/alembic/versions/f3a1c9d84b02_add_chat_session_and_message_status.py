@@ -28,12 +28,24 @@ def upgrade() -> None:
         "chat_sessions",
         sa.Column("status", sa.String(), nullable=False, server_default="active"),
     )
+    op.create_check_constraint(
+        "chat_sessions_status_check",
+        "chat_sessions",
+        "status IN ('active', 'closed')",
+    )
     op.add_column(
         "chat_messages",
         sa.Column("status", sa.String(), nullable=False, server_default="succeeded"),
     )
+    op.create_check_constraint(
+        "chat_messages_status_check",
+        "chat_messages",
+        "status IN ('succeeded', 'failed')",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("chat_messages_status_check", "chat_messages", type_="check")
     op.drop_column("chat_messages", "status")
+    op.drop_constraint("chat_sessions_status_check", "chat_sessions", type_="check")
     op.drop_column("chat_sessions", "status")

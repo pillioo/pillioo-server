@@ -293,9 +293,45 @@ def handle_chat(
     # Commit the session immediately: a brand-new session must survive even
     # if something later in this turn fails (see the failure paths below).
     db.commit()
+
+    # Fetch planning history BEFORE saving the current user message, so on
+    # turn 1 it will be empty and reformulate_followup_query will correctly
+    # short-circuit without making an LLM call (no prior context to resolve).
     planning_history = get_session_messages(db, session.session_id, limit=5)
 
-    client = llm_client or build_llm_client()
+    save_message(
+        db=db,
+        ticket_id=ticket.id,
+        session_id=session.session_id,
+        role="user",
+        content=user_query,
+    )
+    # Commit the question immediately: it must not disappear if client
+    # initialization, retrieval, or the LLM call fails below (previously
+    # db.rollback() on those paths wiped out the just-saved session and
+    # question, leaving zero DB trace of a failed turn).
+    db.commit()
+
+    # Build the LLM client after persisting the user question so that
+    # initialization failures can be caught and persisted as failed assistant
+    # messages rather than leaving no trace of the turn.
+    try:
+        client = llm_client or build_llm_client()
+    except Exception:
+        db.rollback()
+        save_message(
+            db=db,
+            ticket_id=ticket.id,
+            session_id=session.session_id,
+            role="assistant",
+            content="LLM client initialization failed for this question.",
+            status="failed",
+        )
+        db.commit()
+        raise_review_error(
+            ReviewError.INTERNAL_SERVER_ERROR,
+            {"reason": "LLM client initialization failed"}
+        )
     # Best-effort: only attempt on genuine follow-ups (turn 2+), and never
     # let a condense failure block the chat turn -- falls back to the raw
     # last-message heuristic inside build_chat_plan/build_standalone_query.
@@ -311,19 +347,6 @@ def handle_chat(
         state=state,
         resolved_followup=resolved_followup,
     )
-
-    save_message(
-        db=db,
-        ticket_id=ticket.id,
-        session_id=session.session_id,
-        role="user",
-        content=user_query,
-    )
-    # Commit the question immediately: it must not disappear if retrieval or
-    # the LLM call fails below (previously db.rollback() on those paths
-    # wiped out the just-saved session and question, leaving zero DB trace
-    # of a failed turn).
-    db.commit()
 
     event = state.event_normalized
     # Do not use fallback event_id values as recall_number strong filters,

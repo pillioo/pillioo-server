@@ -700,3 +700,51 @@ def test_llm_failure_persists_user_question_and_failed_assistant_message(db_sess
     assert messages[0].status == "succeeded"
     assert messages[1].role == "assistant"
     assert messages[1].status == "failed"
+
+
+def test_llm_client_initialization_failure_persists_user_question_and_failed_message(db_session):
+    """
+    Regression test: if build_llm_client() fails (e.g., missing API key,
+    network error during client setup), the user question must still be
+    persisted along with a failed assistant message, matching the same
+    failure-handling pattern used for retrieval and completion errors.
+    """
+    from fastapi import HTTPException
+    from unittest.mock import patch
+
+    ticket = make_ticket(db_session)
+    evidence_service = FakeEvidenceService(chunks=[chunk()])
+
+    # Simulate build_llm_client() raising an exception (llm_client=None
+    # triggers the real build_llm_client call inside handle_chat).
+    with patch("app.chat.handler.build_llm_client") as mock_build:
+        mock_build.side_effect = RuntimeError("API key missing or invalid")
+
+        with pytest.raises(HTTPException) as exc_info:
+            handle_chat(
+                db=db_session,
+                public_ticket_id=ticket.ticket_id,
+                user_query="What does the SOP say?",
+                session_id=None,
+                retrieval_service=evidence_service,
+                llm_client=None,  # Force call to build_llm_client
+            )
+
+    assert exc_info.value.status_code == 500
+
+    session = db_session.query(ChatSession).filter(ChatSession.ticket_id == ticket.id).first()
+    assert session is not None
+
+    messages = (
+        db_session.query(ChatMessage)
+        .filter(ChatMessage.ticket_id == ticket.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    assert len(messages) == 2
+    assert messages[0].role == "user"
+    assert messages[0].content == "What does the SOP say?"
+    assert messages[0].status == "succeeded"
+    assert messages[1].role == "assistant"
+    assert messages[1].content == "LLM client initialization failed for this question."
+    assert messages[1].status == "failed"

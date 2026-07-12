@@ -6,7 +6,7 @@ SQLAlchemy models for Evidence Chat sessions and messages.
 
 from __future__ import annotations
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import TimeStampedModel
@@ -14,6 +14,9 @@ from app.db.base import TimeStampedModel
 
 class ChatSession(TimeStampedModel):
     __tablename__ = "chat_sessions"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'closed')", name="chat_sessions_status_check"),
+    )
 
     session_id = Column(String, unique=True, nullable=False, index=True)
     ticket_id = Column(
@@ -30,6 +33,9 @@ class ChatSession(TimeStampedModel):
 
 class ChatMessage(TimeStampedModel):
     __tablename__ = "chat_messages"
+    __table_args__ = (
+        CheckConstraint("status IN ('succeeded', 'failed')", name="chat_messages_status_check"),
+    )
 
     ticket_id = Column(
         Integer,
