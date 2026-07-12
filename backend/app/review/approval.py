@@ -45,6 +45,16 @@ def _find_pending_approval(db: Session, ticket_id: int) -> Approval | None:
         .order_by(Approval.id.desc())
         .first()
     )
+    
+def _find_latest_approval(db: Session, ticket_id: int) -> Approval | None:
+    """티켓의 가장 최근 Approval row를 상태 무관하게 찾는다.
+    (아직 사용처 없음 -- revise 시 pending 리셋 여부는 팀 논의 중)"""
+    return (
+        db.query(Approval)
+        .filter(Approval.ticket_id == ticket_id)
+        .order_by(Approval.id.desc())
+        .first()
+    )
 
 def handle_approve(
     db: Session,
@@ -263,6 +273,12 @@ def handle_revise(
         new_version = ReportVersionTag.DRAFT_V2.value
         ticket.status = TicketStatus.REVIEW_ROUTED.value
         ticket.workflow_stage = stage_for_status(TicketStatus.REVIEW_ROUTED).value
+        
+        existing_approval = _find_latest_approval(db, ticket.id)
+        if existing_approval is not None:
+            existing_approval.status = ApprovalStatus.PENDING.value
+            existing_approval.reviewer = ""
+            existing_approval.comment = None
 
     # 3. audit log 기록
     duration_ms = int((time.time() - start) * 1000)
@@ -372,6 +388,12 @@ def handle_system_revise(
         
         ticket.status = TicketStatus.REVIEW_ROUTED.value
         ticket.workflow_stage = stage_for_status(TicketStatus.REVIEW_ROUTED).value
+        
+        existing_approval = _find_latest_approval(db, ticket.id)
+        if existing_approval is not None:
+            existing_approval.status = ApprovalStatus.PENDING.value
+            existing_approval.reviewer = ""
+            existing_approval.comment = None
 
     duration_ms = int((time.time() - start) * 1000)
     write_audit_log(
